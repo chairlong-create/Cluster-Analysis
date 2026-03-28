@@ -304,9 +304,10 @@ npm test
 如果你是第一次接手这个项目，建议按下面顺序看：
 
 1. [README.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/README.md)
-2. [docs/使用手册.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
-3. [docs/PRD.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/PRD.md)
-4. [docs/handoff-2026-03-28.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/handoff-2026-03-28.md)
+2. [docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
+3. [docs/使用手册.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
+4. [docs/PRD.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/PRD.md)
+5. [docs/handoff-2026-03-28.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/handoff-2026-03-28.md)
 
 ## 已知限制
 
@@ -323,4 +324,5 @@ npm test
 - 让每位同事在自己的机器上填写 API Key
 - 建议每位同事单独设置自己的 `DATABASE_FILE`
 - 首次启动前先跑 `npm install && npm run lint && npm test`
+- 推荐直接把这份说明发给同事：[docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
 - 首次使用前，先让同事看一遍 [docs/使用手册.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
