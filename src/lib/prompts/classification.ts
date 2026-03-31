@@ -7,18 +7,14 @@ type CategoryInput = {
   isOther: number;
 };
 
-export function getClassificationSystemPrompt() {
-  return getPromptSettings().classificationSystemPrompt;
-}
-
-export function buildClassificationPrompt(input: {
+export function buildClassificationSystemPrompt(input: {
   text: string;
   extractedReason: string;
   categories: CategoryInput[];
   analysisGoal: string;
   analysisFocusLabel: string;
 }) {
-  return renderPromptTemplate(getPromptSettings().classificationUserPromptTemplate, {
+  return renderPromptTemplate(getPromptSettings().classificationSystemPrompt, {
     category_list: input.categories
       .map((category, index) => `${index + 1}. ${category.name}: ${category.definition}`)
       .join("\n"),
@@ -27,4 +23,8 @@ export function buildClassificationPrompt(input: {
     analysis_goal: input.analysisGoal,
     analysis_focus_label: input.analysisFocusLabel,
   });
+}
+
+export function getClassificationUserPrompt() {
+  return "请严格根据 system prompt 中的要求完成分类，并只输出 JSON 结果。";
 }

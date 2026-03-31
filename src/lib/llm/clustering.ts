@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getAppSettings } from "@/lib/app-config";
-import { buildClusteringPrompt, getClusteringSystemPrompt } from "@/lib/prompts/clustering";
+import { buildClusteringSystemPrompt, getClusteringUserPrompt } from "@/lib/prompts/clustering";
 
 type ClusterCandidate = {
   name: string;
@@ -124,7 +124,7 @@ function mockCluster(reasons: string[], analysisFocusLabel: string): ClusterSugg
   return {
     categories,
     log: {
-      promptText: buildClusteringPrompt(reasons, `分析对话中的${analysisFocusLabel}`, analysisFocusLabel),
+      promptText: buildClusteringSystemPrompt(reasons, `分析对话中的${analysisFocusLabel}`, analysisFocusLabel),
       responseText: JSON.stringify({ categories }),
       status: "succeeded",
       latencyMs: 0,
@@ -143,7 +143,8 @@ export async function clusterReasonsWithMiniMax(
   const apiKey = settings.llmApiKey;
   const baseUrl = settings.llmBaseUrl;
   const model = settings.llmModel;
-  const promptText = buildClusteringPrompt(reasons, analysisGoal, analysisFocusLabel);
+  const systemPrompt = buildClusteringSystemPrompt(reasons, analysisGoal, analysisFocusLabel);
+  const userPrompt = getClusteringUserPrompt();
 
   if (!apiKey) {
     return mockCluster(reasons, analysisFocusLabel);
@@ -162,11 +163,11 @@ export async function clusterReasonsWithMiniMax(
       messages: [
         {
           role: "system",
-          content: getClusteringSystemPrompt(),
+          content: systemPrompt,
         },
         {
           role: "user",
-          content: promptText,
+          content: userPrompt,
         },
       ],
       response_format: {
@@ -183,7 +184,7 @@ export async function clusterReasonsWithMiniMax(
     return {
       categories: [],
       log: {
-        promptText,
+        promptText: systemPrompt,
         responseText,
         status: "failed",
         latencyMs,
@@ -213,7 +214,7 @@ export async function clusterReasonsWithMiniMax(
     return {
       categories: normalizedCategories,
       log: {
-        promptText,
+        promptText: systemPrompt,
         responseText:
           parsed.categories.length > normalizedCategories.length
             ? `${responseText}\n\n[cluster-normalized]\noriginal_categories=${parsed.categories.length}, normalized_categories=${normalizedCategories.length}`
@@ -230,7 +231,7 @@ export async function clusterReasonsWithMiniMax(
     return {
       categories: [],
       log: {
-        promptText,
+        promptText: systemPrompt,
         responseText: `${responseText}\n\n[cluster-parse-error]\n${message}`,
         status: "failed",
         latencyMs,

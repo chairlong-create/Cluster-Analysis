@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { getAppSettings } from "@/lib/app-config";
 import { db } from "@/lib/db";
+import { withHeartbeat } from "@/lib/heartbeat";
 import { classifyDialogWithMiniMax } from "@/lib/llm/classification";
 import { failRunningStepRuns, failStepRun } from "@/lib/step-run-utils";
 
@@ -58,6 +59,61 @@ export async function runBatchClassification(taskId: string, batchId: string) {
     .all(taskId, batchId) as DialogRow[];
 
   return runBatchClassificationForDialogs(taskId, batchId, dialogs);
+}
+
+type ClassificationRunLookup = {
+  id: string;
+  stepType: string;
+};
+
+export async function retryFailedBatchClassification(taskId: string, batchId: string) {
+  const latestRun = db
+    .prepare(`
+      SELECT id, step_type AS stepType
+      FROM step_runs
+      WHERE task_id = ? AND batch_id = ? AND step_type IN ('classify', 'classify_retry')
+      ORDER BY started_at DESC
+      LIMIT 1
+    `)
+    .get(taskId, batchId) as ClassificationRunLookup | undefined;
+
+  if (!latestRun) {
+    throw new Error("当前批次还没有可重试的分类记录");
+  }
+
+  const dialogs = db
+    .prepare(`
+      SELECT
+        d.id AS dialogId,
+        d.batch_id AS batchId,
+        d.source_dialog_id AS sourceDialogId,
+        d.source_text AS sourceText,
+        r.buy_block_reason AS extractedReason
+      FROM dialogs d
+      LEFT JOIN dialog_analysis_results r ON r.dialog_id = d.id
+      LEFT JOIN step_run_items sri
+        ON sri.dialog_id = d.id
+       AND sri.step_run_id = @stepRunId
+      WHERE d.task_id = @taskId
+        AND d.batch_id = @batchId
+        AND (
+          sri.id IS NULL
+          OR sri.parsed_status = 'failed'
+          OR COALESCE(sri.error_message, '') <> ''
+        )
+      ORDER BY d.created_at ASC
+    `)
+    .all({
+      taskId,
+      batchId,
+      stepRunId: latestRun.id,
+    }) as DialogRow[];
+
+  if (!dialogs.length) {
+    throw new Error("当前批次没有可重试的失败分类条目");
+  }
+
+  return runBatchClassificationForDialogs(taskId, batchId, dialogs, "classify_retry");
 }
 
 export async function runBatchClassificationForDialogs(
@@ -127,9 +183,9 @@ export async function runBatchClassificationForDialogs(
 
   db.prepare(`
     INSERT INTO step_runs (
-      id, task_id, batch_id, step_type, round_no, status, input_count, success_count, failed_count, started_at
+      id, task_id, batch_id, step_type, round_no, status, input_count, success_count, failed_count, started_at, last_heartbeat_at
     ) VALUES (
-      @id, @taskId, @batchId, @stepType, @roundNo, 'running', @inputCount, 0, 0, @startedAt
+      @id, @taskId, @batchId, @stepType, @roundNo, 'running', @inputCount, 0, 0, @startedAt, @lastHeartbeatAt
     )
   `).run({
     id: stepRunId,
@@ -139,6 +195,7 @@ export async function runBatchClassificationForDialogs(
     roundNo: latestRound.latestRound + 1,
     inputCount: dialogs.length,
     startedAt: now,
+    lastHeartbeatAt: now,
   });
 
   if (batchId) {
@@ -190,11 +247,32 @@ export async function runBatchClassificationForDialogs(
     const { classifyConcurrency, llmApiKey, llmModel } = getAppSettings();
     const concurrency = Number(classifyConcurrency || 5);
     let cursor = 0;
+    let lastProgressFlushAt = 0;
     const updateRunProgress = db.prepare(`
     UPDATE step_runs
-    SET success_count = @successCount, failed_count = @failedCount
+    SET success_count = @successCount, failed_count = @failedCount, last_heartbeat_at = @lastHeartbeatAt
     WHERE id = @id
   `);
+    const beatStepRun = db.prepare(`
+    UPDATE step_runs
+    SET last_heartbeat_at = @lastHeartbeatAt
+    WHERE id = @id AND status = 'running'
+  `);
+
+    function flushRunProgress(force = false) {
+      const nowTs = Date.now();
+      if (!force && nowTs - lastProgressFlushAt < 1000) {
+        return;
+      }
+
+      lastProgressFlushAt = nowTs;
+      updateRunProgress.run({
+        id: stepRunId,
+        successCount,
+        failedCount,
+        lastHeartbeatAt: new Date(nowTs).toISOString(),
+      });
+    }
 
     async function worker() {
       while (cursor < dialogs.length) {
@@ -265,11 +343,7 @@ export async function runBatchClassificationForDialogs(
             otherCount += 1;
           }
 
-          updateRunProgress.run({
-            id: stepRunId,
-            successCount,
-            failedCount,
-          });
+          flushRunProgress();
 
           if (previewRows.length < 6) {
             previewRows.push({
@@ -310,16 +384,23 @@ export async function runBatchClassificationForDialogs(
             });
           });
 
-          updateRunProgress.run({
-            id: stepRunId,
-            successCount,
-            failedCount,
-          });
+          flushRunProgress();
         }
       }
     }
 
-    await Promise.all(Array.from({ length: Math.min(concurrency, dialogs.length) }, () => worker()));
+    await withHeartbeat({
+      intervalMs: 1000,
+      beat: () => {
+        beatStepRun.run({
+          id: stepRunId,
+          lastHeartbeatAt: new Date().toISOString(),
+        });
+      },
+      run: () => Promise.all(Array.from({ length: Math.min(concurrency, dialogs.length) }, () => worker())),
+    });
+
+    flushRunProgress(true);
 
     const finalStatus =
       failedCount === 0 ? "succeeded" : successCount > 0 ? "partial_success" : "failed";
@@ -328,7 +409,7 @@ export async function runBatchClassificationForDialogs(
     db.transaction(() => {
       db.prepare(`
       UPDATE step_runs
-      SET status = @status, success_count = @successCount, failed_count = @failedCount, finished_at = @finishedAt
+      SET status = @status, success_count = @successCount, failed_count = @failedCount, finished_at = @finishedAt, last_heartbeat_at = @lastHeartbeatAt
       WHERE id = @id
     `).run({
       id: stepRunId,
@@ -336,6 +417,7 @@ export async function runBatchClassificationForDialogs(
       successCount,
       failedCount,
       finishedAt,
+      lastHeartbeatAt: finishedAt,
     });
 
       if (batchId) {

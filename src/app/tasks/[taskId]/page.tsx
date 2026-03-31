@@ -21,7 +21,6 @@ import type {
   TaskSummary,
 } from "@/components/task-workspace-types";
 import { db } from "@/lib/db";
-import { repairOtherCategoryReferences } from "@/lib/data-integrity";
 import { reconcileStalledStepRuns } from "@/lib/step-run-utils";
 
 type TaskPageProps = {
@@ -150,8 +149,6 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
   if (!task) {
     notFound();
   }
-
-  repairOtherCategoryReferences(task.id);
 
   const batches = db
     .prepare(`
@@ -316,7 +313,7 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
         failed_count AS failedCount,
         finished_at AS finishedAt
       FROM step_runs
-      WHERE task_id = ? AND step_type = 'classify'
+      WHERE task_id = ? AND step_type IN ('classify', 'classify_retry')
       ORDER BY started_at DESC
       LIMIT 20
     `)
@@ -424,15 +421,28 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
   const extractionPreviewRows = db
     .prepare(`
       SELECT
-        d.batch_id AS batchId,
-        d.source_dialog_id AS sourceDialogId,
-        COALESCE(r.buy_block_reason, '') AS analysisSummary,
-        COALESCE(r.evidence_quote, '') AS evidenceQuote,
-        r.updated_at AS updatedAt
-      FROM dialog_analysis_results r
-      JOIN dialogs d ON d.id = r.dialog_id
-      WHERE r.task_id = ? AND r.buy_block_reason IS NOT NULL AND r.buy_block_reason <> ''
-      ORDER BY r.updated_at DESC
+        ranked.batchId,
+        ranked.sourceDialogId,
+        ranked.analysisSummary,
+        ranked.evidenceQuote,
+        ranked.updatedAt
+      FROM (
+        SELECT
+          d.batch_id AS batchId,
+          d.source_dialog_id AS sourceDialogId,
+          COALESCE(r.buy_block_reason, '') AS analysisSummary,
+          COALESCE(r.evidence_quote, '') AS evidenceQuote,
+          r.updated_at AS updatedAt,
+          ROW_NUMBER() OVER (
+            PARTITION BY d.batch_id
+            ORDER BY r.updated_at DESC
+          ) AS rowNo
+        FROM dialog_analysis_results r
+        JOIN dialogs d ON d.id = r.dialog_id
+        WHERE r.task_id = ? AND r.buy_block_reason IS NOT NULL AND r.buy_block_reason <> ''
+      ) ranked
+      WHERE ranked.rowNo <= 3
+      ORDER BY ranked.updatedAt DESC
     `)
     .all(taskId) as Array<{
     batchId: string;
@@ -445,14 +455,12 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
   const extractionSamplesByBatch = new Map<string, ExtractionSample[]>();
   for (const row of extractionPreviewRows) {
     const group = extractionSamplesByBatch.get(row.batchId) ?? [];
-    if (group.length < 3) {
-      group.push({
-        sourceDialogId: row.sourceDialogId,
-        analysisSummary: row.analysisSummary,
-        evidenceQuote: row.evidenceQuote,
-      });
-      extractionSamplesByBatch.set(row.batchId, group);
-    }
+    group.push({
+      sourceDialogId: row.sourceDialogId,
+      analysisSummary: row.analysisSummary,
+      evidenceQuote: row.evidenceQuote,
+    });
+    extractionSamplesByBatch.set(row.batchId, group);
   }
 
   const batchRunsActive =
@@ -708,7 +716,7 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
 
   return (
     <main className="workspaceShell">
-      <TaskLiveRefresh active={hasActiveRuns} />
+      <TaskLiveRefresh active={hasActiveRuns} intervalMs={8000} />
       <TaskIterateResume
         resumeUrl={`/api/tasks/${task.id}/iterate/resume`}
         shouldResume={iterateNeedsResumeToCluster || iterateNeedsResumeToClassify}

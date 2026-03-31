@@ -6,11 +6,7 @@ type MergeCategoryInput = {
   hitCount: number;
 };
 
-export function getCategoryMergeSystemPrompt() {
-  return getPromptSettings().categoryMergeSystemPrompt;
-}
-
-export function buildCategoryMergePrompt(categories: MergeCategoryInput[], maxTargetCount: number) {
+export function buildCategoryMergeSystemPrompt(categories: MergeCategoryInput[], maxTargetCount: number) {
   const categoryList = categories
     .map(
       (category, index) =>
@@ -18,8 +14,12 @@ export function buildCategoryMergePrompt(categories: MergeCategoryInput[], maxTa
     )
     .join("\n\n");
 
-  return renderPromptTemplate(getPromptSettings().categoryMergeUserPromptTemplate, {
+  return renderPromptTemplate(getPromptSettings().categoryMergeSystemPrompt, {
     max_target_count: String(maxTargetCount),
     merge_category_list: categoryList,
   });
+}
+
+export function getCategoryMergeUserPrompt() {
+  return "请严格根据 system prompt 中的要求完成类别合并，并只输出 JSON 结果。";
 }

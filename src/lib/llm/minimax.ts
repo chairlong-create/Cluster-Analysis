@@ -1,7 +1,7 @@
 import { getAppSettings } from "@/lib/app-config";
 import { parseExtractionResponse } from "@/lib/llm/extraction-parser";
 import type { ExtractionRequest, ExtractionResult, ProviderExtractionResponse } from "@/lib/llm/types";
-import { buildExtractionUserPrompt, getExtractionSystemPrompt } from "@/lib/prompts/extraction";
+import { buildExtractionSystemPrompt, getExtractionUserPrompt } from "@/lib/prompts/extraction";
 
 function createMockResponse(request: ExtractionRequest): ProviderExtractionResponse {
   const text = request.text.replace(/\s+/g, "");
@@ -51,7 +51,7 @@ function createMockResponse(request: ExtractionRequest): ProviderExtractionRespo
   return {
     result,
     log: {
-      promptText: buildExtractionUserPrompt(request),
+      promptText: buildExtractionSystemPrompt(request),
       responseText: JSON.stringify(result),
       status: "succeeded",
       latencyMs: 0,
@@ -68,7 +68,8 @@ export async function extractReasonWithMiniMax(
   const apiKey = settings.llmApiKey;
   const baseUrl = settings.llmBaseUrl;
   const model = settings.llmModel;
-  const promptText = buildExtractionUserPrompt(request);
+  const systemPrompt = buildExtractionSystemPrompt(request);
+  const userPrompt = getExtractionUserPrompt();
 
   if (!apiKey) {
     return createMockResponse(request);
@@ -85,8 +86,8 @@ export async function extractReasonWithMiniMax(
       model,
       temperature: 0.2,
       messages: [
-        { role: "system", content: getExtractionSystemPrompt() },
-        { role: "user", content: promptText },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
       response_format: {
         type: "json_object",
@@ -108,7 +109,7 @@ export async function extractReasonWithMiniMax(
         confidence: 0,
       },
       log: {
-        promptText,
+        promptText: systemPrompt,
         responseText,
         status: "failed",
         latencyMs,
@@ -121,7 +122,7 @@ export async function extractReasonWithMiniMax(
   return {
     result: parseExtractionResponse(responseText),
     log: {
-      promptText,
+      promptText: systemPrompt,
       responseText,
       status: "succeeded",
       latencyMs,

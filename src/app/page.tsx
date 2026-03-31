@@ -9,7 +9,7 @@ import {
 import { DeleteTaskForm } from "@/components/delete-task-form";
 import { getAppSettings } from "@/lib/app-config";
 import { db } from "@/lib/db";
-import { getPromptSettings } from "@/lib/prompt-config";
+import { getPromptSettings, promptReferences } from "@/lib/prompt-config";
 
 type HomeProps = {
   searchParams?: Promise<{
@@ -232,77 +232,60 @@ export default async function Home({ searchParams }: HomeProps) {
             <form action={updatePromptSettingsAction} className="stack">
               <div className="grid twoColumns">
                 <label className="field">
-                  <span>提取 System Prompt</span>
+                  <span>提取参考模板（只读）</span>
+                  <textarea rows={8} value={promptReferences.extraction} readOnly />
+                </label>
+                <label className="field">
+                  <span>提取实际生效 Prompt</span>
                   <textarea name="extractionSystemPrompt" rows={8} defaultValue={promptSettings.extractionSystemPrompt} required />
                 </label>
-                <label className="field">
-                  <span>提取 User Prompt 模板</span>
-                  <textarea
-                    name="extractionUserPromptTemplate"
-                    rows={8}
-                    defaultValue={promptSettings.extractionUserPromptTemplate}
-                    required
-                  />
-                </label>
               </div>
               <div className="grid twoColumns">
                 <label className="field">
-                  <span>聚类 System Prompt</span>
+                  <span>聚类参考模板（只读）</span>
+                  <textarea rows={8} value={promptReferences.clustering} readOnly />
+                </label>
+                <label className="field">
+                  <span>聚类实际生效 Prompt</span>
                   <textarea name="clusteringSystemPrompt" rows={6} defaultValue={promptSettings.clusteringSystemPrompt} required />
                 </label>
-                <label className="field">
-                  <span>聚类 User Prompt 模板</span>
-                  <textarea
-                    name="clusteringUserPromptTemplate"
-                    rows={8}
-                    defaultValue={promptSettings.clusteringUserPromptTemplate}
-                    required
-                  />
-                </label>
               </div>
               <div className="grid twoColumns">
                 <label className="field">
-                  <span>分类 System Prompt</span>
+                  <span>分类参考模板（只读）</span>
+                  <textarea rows={10} value={promptReferences.classification} readOnly />
+                </label>
+                <label className="field">
+                  <span>分类实际生效 Prompt</span>
                   <textarea
                     name="classificationSystemPrompt"
-                    rows={6}
+                    rows={10}
                     defaultValue={promptSettings.classificationSystemPrompt}
                     required
                   />
                 </label>
-                <label className="field">
-                  <span>分类 User Prompt 模板</span>
-                  <textarea
-                    name="classificationUserPromptTemplate"
-                    rows={10}
-                    defaultValue={promptSettings.classificationUserPromptTemplate}
-                    required
-                  />
-                </label>
               </div>
               <div className="grid twoColumns">
                 <label className="field">
-                  <span>合并类别 System Prompt</span>
-                  <textarea
-                    name="categoryMergeSystemPrompt"
-                    rows={8}
-                    defaultValue={promptSettings.categoryMergeSystemPrompt}
-                    required
-                  />
+                  <span>合并类别参考模板（只读）</span>
+                  <textarea rows={10} value={promptReferences.categoryMerge} readOnly />
                 </label>
                 <label className="field">
-                  <span>合并类别 User Prompt 模板</span>
+                  <span>合并类别实际生效 Prompt</span>
                   <textarea
-                    name="categoryMergeUserPromptTemplate"
+                    name="categoryMergeSystemPrompt"
                     rows={10}
-                    defaultValue={promptSettings.categoryMergeUserPromptTemplate}
+                    defaultValue={promptSettings.categoryMergeSystemPrompt}
                     required
                   />
                 </label>
               </div>
               {promptSaved ? <p className="successText">Prompt 配置已保存并生效。</p> : null}
               <p className="hint">
-                模板支持变量：提取 <code>{"{{dialog_id}}"}</code> <code>{"{{dialog_text}}"}</code>；聚类{" "}
+                左侧是参考模板，只用于展示，不会被代码直接使用。右侧才是实际生效的 Prompt；如果你从未修改过，右侧默认值与左侧模板相同。
+              </p>
+              <p className="hint">
+                实际生效 Prompt 支持变量：提取 <code>{"{{dialog_id}}"}</code> <code>{"{{dialog_text}}"}</code>；聚类{" "}
                 <code>{"{{reasons_list}}"}</code>；分类 <code>{"{{category_list}}"}</code>{" "}
                 <code>{"{{extracted_reason}}"}</code> <code>{"{{dialog_text}}"}</code>；合并类别{" "}
                 <code>{"{{max_target_count}}"}</code> <code>{"{{merge_category_list}}"}</code>。

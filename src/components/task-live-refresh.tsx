@@ -17,6 +17,10 @@ export function TaskLiveRefresh({ active, intervalMs = 2000 }: TaskLiveRefreshPr
     }
 
     const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
       router.refresh();
     }, intervalMs);
 

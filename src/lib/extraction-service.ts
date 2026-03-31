@@ -216,6 +216,7 @@ export async function runReasonExtractionForDialogs(
     const { extractionConcurrency, llmApiKey, llmModel } = getAppSettings();
     const concurrency = Number(extractionConcurrency || 5);
     let cursor = 0;
+    let lastProgressFlushAt = 0;
     const updateRunProgress = db.prepare(`
     UPDATE step_runs
     SET success_count = @successCount, failed_count = @failedCount, last_heartbeat_at = @lastHeartbeatAt
@@ -226,6 +227,21 @@ export async function runReasonExtractionForDialogs(
     SET last_heartbeat_at = @lastHeartbeatAt
     WHERE id = @id AND status = 'running'
   `);
+
+    function flushRunProgress(force = false) {
+      const nowTs = Date.now();
+      if (!force && nowTs - lastProgressFlushAt < 1000) {
+        return;
+      }
+
+      lastProgressFlushAt = nowTs;
+      updateRunProgress.run({
+        id: stepRunId,
+        successCount,
+        failedCount,
+        lastHeartbeatAt: new Date(nowTs).toISOString(),
+      });
+    }
 
     async function worker() {
       while (cursor < dialogs.length) {
@@ -292,12 +308,7 @@ export async function runReasonExtractionForDialogs(
             failedCount += 1;
           }
 
-          updateRunProgress.run({
-            id: stepRunId,
-            successCount,
-            failedCount,
-            lastHeartbeatAt: new Date().toISOString(),
-          });
+          flushRunProgress();
 
           if (previewRows.length < 5) {
             previewRows.push({
@@ -328,12 +339,7 @@ export async function runReasonExtractionForDialogs(
             createdAt,
           });
 
-          updateRunProgress.run({
-            id: stepRunId,
-            successCount,
-            failedCount,
-            lastHeartbeatAt: new Date().toISOString(),
-          });
+          flushRunProgress();
         }
       }
     }
@@ -348,6 +354,8 @@ export async function runReasonExtractionForDialogs(
       },
       run: () => Promise.all(Array.from({ length: Math.min(concurrency, dialogs.length) }, () => worker())),
     });
+
+    flushRunProgress(true);
 
     const finalStatus =
       failedCount === 0 ? "succeeded" : successCount > 0 ? "partial_success" : "failed";

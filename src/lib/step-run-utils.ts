@@ -101,7 +101,7 @@ function mapRecoveredBatchStatus(stepType: string, successCount: number, failedC
     return "extract_failed";
   }
 
-  if (stepType === "classify" || stepType === "iterate_others_classify") {
+  if (stepType === "classify" || stepType === "classify_retry" || stepType === "iterate_others_classify") {
     if (successCount === 0 && failedCount > 0) {
       return "classify_failed";
     }
@@ -143,7 +143,7 @@ export function reconcileStalledStepRuns(staleAfterMs = 15000) {
         ) AS lastActivityAt
       FROM step_runs sr
       WHERE sr.status = 'running'
-        AND sr.step_type IN ('extract_reasons', 'classify', 'iterate_others_extract', 'iterate_others_classify')
+        AND sr.step_type IN ('extract_reasons', 'classify', 'classify_retry', 'iterate_others_extract', 'iterate_others_classify')
     `)
     .all() as ReconcileCandidate[];
 

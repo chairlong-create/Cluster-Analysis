@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { launchBackgroundTask } from "@/lib/background-task";
-import { runBatchClassification } from "@/lib/classification-service";
+import { retryFailedBatchClassification } from "@/lib/classification-service";
 
 type RouteContext = {
   params: Promise<{
@@ -16,17 +16,17 @@ export async function POST(_request: Request, { params }: RouteContext) {
   try {
     launchBackgroundTask(
       async () => {
-        await runBatchClassification(taskId, batchId);
+        await retryFailedBatchClassification(taskId, batchId);
       },
       (error) => {
-        console.error("classify failed", error);
+        console.error("classify_retry failed", error);
       },
     );
 
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "批量分类启动失败" },
+      { error: error instanceof Error ? error.message : "失败分类条目重试启动失败" },
       { status: 500 },
     );
   }

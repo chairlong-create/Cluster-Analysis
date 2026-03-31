@@ -94,13 +94,9 @@ const categoryMergeApplySchema = z.object({
 
 const promptSettingsSchema = z.object({
   extractionSystemPrompt: z.string().trim().min(1, "提取 system prompt 不能为空"),
-  extractionUserPromptTemplate: z.string().trim().min(1, "提取 user prompt 不能为空"),
   clusteringSystemPrompt: z.string().trim().min(1, "聚类 system prompt 不能为空"),
-  clusteringUserPromptTemplate: z.string().trim().min(1, "聚类 user prompt 不能为空"),
   classificationSystemPrompt: z.string().trim().min(1, "分类 system prompt 不能为空"),
-  classificationUserPromptTemplate: z.string().trim().min(1, "分类 user prompt 不能为空"),
   categoryMergeSystemPrompt: z.string().trim().min(1, "合并 system prompt 不能为空"),
-  categoryMergeUserPromptTemplate: z.string().trim().min(1, "合并 user prompt 不能为空"),
 });
 
 type InlineCategoryResult =
@@ -533,19 +529,11 @@ export async function updatePromptSettingsAction(formData: FormData) {
   const current = getPromptSettings();
   const parsed = promptSettingsSchema.safeParse({
     extractionSystemPrompt: formData.get("extractionSystemPrompt") ?? current.extractionSystemPrompt,
-    extractionUserPromptTemplate:
-      formData.get("extractionUserPromptTemplate") ?? current.extractionUserPromptTemplate,
     clusteringSystemPrompt: formData.get("clusteringSystemPrompt") ?? current.clusteringSystemPrompt,
-    clusteringUserPromptTemplate:
-      formData.get("clusteringUserPromptTemplate") ?? current.clusteringUserPromptTemplate,
     classificationSystemPrompt:
       formData.get("classificationSystemPrompt") ?? current.classificationSystemPrompt,
-    classificationUserPromptTemplate:
-      formData.get("classificationUserPromptTemplate") ?? current.classificationUserPromptTemplate,
     categoryMergeSystemPrompt:
       formData.get("categoryMergeSystemPrompt") ?? current.categoryMergeSystemPrompt,
-    categoryMergeUserPromptTemplate:
-      formData.get("categoryMergeUserPromptTemplate") ?? current.categoryMergeUserPromptTemplate,
   });
 
   if (!parsed.success) {

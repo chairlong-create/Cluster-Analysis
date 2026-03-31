@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { getAppSettings } from "@/lib/app-config";
 import {
-  buildClassificationPrompt,
-  getClassificationSystemPrompt,
+  buildClassificationSystemPrompt,
+  getClassificationUserPrompt,
 } from "@/lib/prompts/classification";
 
 type CategoryInput = {
@@ -115,7 +115,7 @@ function mockClassify(input: {
   return {
     result,
     log: {
-      promptText: buildClassificationPrompt(input),
+      promptText: buildClassificationSystemPrompt(input),
       responseText: JSON.stringify(result),
       status: "succeeded",
       latencyMs: 0,
@@ -136,7 +136,8 @@ export async function classifyDialogWithMiniMax(input: {
   const apiKey = settings.llmApiKey;
   const baseUrl = settings.llmBaseUrl;
   const model = settings.llmModel;
-  const promptText = buildClassificationPrompt(input);
+  const systemPrompt = buildClassificationSystemPrompt(input);
+  const userPrompt = getClassificationUserPrompt();
 
   if (!apiKey) {
     return mockClassify(input);
@@ -155,11 +156,11 @@ export async function classifyDialogWithMiniMax(input: {
       messages: [
         {
           role: "system",
-          content: getClassificationSystemPrompt(),
+          content: systemPrompt,
         },
         {
           role: "user",
-          content: promptText,
+          content: userPrompt,
         },
       ],
       response_format: {
@@ -184,7 +185,7 @@ export async function classifyDialogWithMiniMax(input: {
         confidence: 0,
       },
       log: {
-        promptText,
+        promptText: systemPrompt,
         responseText,
         status: "failed",
         latencyMs,
@@ -223,7 +224,7 @@ export async function classifyDialogWithMiniMax(input: {
       confidence: parsed.confidence,
     },
     log: {
-      promptText,
+      promptText: systemPrompt,
       responseText,
       status: "succeeded",
       latencyMs,

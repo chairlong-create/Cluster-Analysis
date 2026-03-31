@@ -2,35 +2,26 @@ import { db } from "@/lib/db";
 
 type PromptKey =
   | "extraction_system_prompt"
-  | "extraction_user_prompt_template"
   | "clustering_system_prompt"
-  | "clustering_user_prompt_template"
   | "classification_system_prompt"
-  | "classification_user_prompt_template"
-  | "category_merge_system_prompt"
-  | "category_merge_user_prompt_template";
+  | "category_merge_system_prompt";
 
 export type PromptSettings = {
   extractionSystemPrompt: string;
-  extractionUserPromptTemplate: string;
   clusteringSystemPrompt: string;
-  clusteringUserPromptTemplate: string;
   classificationSystemPrompt: string;
-  classificationUserPromptTemplate: string;
   categoryMergeSystemPrompt: string;
-  categoryMergeUserPromptTemplate: string;
 };
 
-export const defaultPromptSettings: PromptSettings = {
-  extractionSystemPrompt: [
-    "你是对话分析助手。",
-    "请围绕任务分析目标提取最核心的一条分析信号。",
-    "必须输出 JSON，不要输出 Markdown，不要解释。",
-    "如果没有明确的目标信号，has_buy_block_reason 返回 false，其余字段尽量留空字符串。",
-    "evidence_quote 必须直接引用原对话中的一句或几句原文。",
-    "buy_block_reason 要用一句中文概括。",
-  ].join("\n"),
-  extractionUserPromptTemplate: [
+export type PromptReferences = {
+  extraction: string;
+  clustering: string;
+  classification: string;
+  categoryMerge: string;
+};
+
+export const promptReferences: PromptReferences = {
+  extraction: [
     "任务目标：{{analysis_goal}}",
     "请阅读下面的对话，提取与任务目标最相关的一条{{analysis_focus_label}}。",
     "",
@@ -51,9 +42,7 @@ export const defaultPromptSettings: PromptSettings = {
     "对话全文：",
     "{{dialog_text}}",
   ].join("\n"),
-  clusteringSystemPrompt:
-    "你是对话分析聚类助手。请把分析摘要聚类成稳定类别，只输出 JSON。",
-  clusteringUserPromptTemplate: [
+  clustering: [
     "任务目标：{{analysis_goal}}",
     "请将下面这些“{{analysis_focus_label}}摘要”聚类成可复用的类别定义。",
     "要求：",
@@ -81,9 +70,7 @@ export const defaultPromptSettings: PromptSettings = {
     "原因列表：",
     "{{reasons_list}}",
   ].join("\n"),
-  classificationSystemPrompt:
-    "你是对话分析分类助手。请严格按给定类别表做单标签分类，只输出 JSON。",
-  classificationUserPromptTemplate: [
+  classification: [
     "任务目标：{{analysis_goal}}",
     "请根据下面的类别表，对对话进行单标签归类。",
     "要求：",
@@ -113,19 +100,7 @@ export const defaultPromptSettings: PromptSettings = {
       2,
     ),
   ].join("\n"),
-  categoryMergeSystemPrompt: [
-    "你是一个负责收敛归因类别表的分析助手。",
-    "你的目标是把含义相近、边界高度重叠的类别合并成更稳定、更可复用的类别体系。",
-    "",
-    "必须遵守：",
-    "1. 输出严格 JSON，不要输出额外说明。",
-    "2. 合并后的类别数不能超过用户给定上限。",
-    "3. 每个输入类别必须被覆盖且只能出现一次。",
-    "4. 不要发明与原始语义无关的新大类。",
-    "5. 优先保留高频主类，让低频近义类并入主类。",
-    "6. 名称要简洁、稳定、可用于后续分类。",
-  ].join("\n"),
-  categoryMergeUserPromptTemplate: [
+  categoryMerge: [
     "请基于下面这组任务级类别表，合并含义相近的类别。",
     "",
     "要求：",
@@ -154,6 +129,13 @@ export const defaultPromptSettings: PromptSettings = {
   ].join("\n"),
 };
 
+export const defaultPromptSettings: PromptSettings = {
+  extractionSystemPrompt: promptReferences.extraction,
+  clusteringSystemPrompt: promptReferences.clustering,
+  classificationSystemPrompt: promptReferences.classification,
+  categoryMergeSystemPrompt: promptReferences.categoryMerge,
+};
+
 function getPromptSettingValue(key: PromptKey) {
   const row = db
     .prepare(`SELECT value FROM app_settings WHERE key = ?`)
@@ -166,26 +148,14 @@ export function getPromptSettings(): PromptSettings {
   return {
     extractionSystemPrompt:
       getPromptSettingValue("extraction_system_prompt") ?? defaultPromptSettings.extractionSystemPrompt,
-    extractionUserPromptTemplate:
-      getPromptSettingValue("extraction_user_prompt_template") ??
-      defaultPromptSettings.extractionUserPromptTemplate,
     clusteringSystemPrompt:
       getPromptSettingValue("clustering_system_prompt") ?? defaultPromptSettings.clusteringSystemPrompt,
-    clusteringUserPromptTemplate:
-      getPromptSettingValue("clustering_user_prompt_template") ??
-      defaultPromptSettings.clusteringUserPromptTemplate,
     classificationSystemPrompt:
       getPromptSettingValue("classification_system_prompt") ??
       defaultPromptSettings.classificationSystemPrompt,
-    classificationUserPromptTemplate:
-      getPromptSettingValue("classification_user_prompt_template") ??
-      defaultPromptSettings.classificationUserPromptTemplate,
     categoryMergeSystemPrompt:
       getPromptSettingValue("category_merge_system_prompt") ??
       defaultPromptSettings.categoryMergeSystemPrompt,
-    categoryMergeUserPromptTemplate:
-      getPromptSettingValue("category_merge_user_prompt_template") ??
-      defaultPromptSettings.categoryMergeUserPromptTemplate,
   };
 }
 
@@ -201,35 +171,15 @@ export function savePromptSettings(input: PromptSettings) {
 
   const transaction = db.transaction(() => {
     upsert.run({ key: "extraction_system_prompt", value: input.extractionSystemPrompt.trim(), updatedAt: now });
-    upsert.run({
-      key: "extraction_user_prompt_template",
-      value: input.extractionUserPromptTemplate.trim(),
-      updatedAt: now,
-    });
     upsert.run({ key: "clustering_system_prompt", value: input.clusteringSystemPrompt.trim(), updatedAt: now });
-    upsert.run({
-      key: "clustering_user_prompt_template",
-      value: input.clusteringUserPromptTemplate.trim(),
-      updatedAt: now,
-    });
     upsert.run({
       key: "classification_system_prompt",
       value: input.classificationSystemPrompt.trim(),
       updatedAt: now,
     });
     upsert.run({
-      key: "classification_user_prompt_template",
-      value: input.classificationUserPromptTemplate.trim(),
-      updatedAt: now,
-    });
-    upsert.run({
       key: "category_merge_system_prompt",
       value: input.categoryMergeSystemPrompt.trim(),
-      updatedAt: now,
-    });
-    upsert.run({
-      key: "category_merge_user_prompt_template",
-      value: input.categoryMergeUserPromptTemplate.trim(),
       updatedAt: now,
     });
   });

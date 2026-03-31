@@ -1,0 +1,1481 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>我如何和 Codex 一起，通过 vibe coding 做出一个应用</title>
+  <style>
+    :root {
+      --bg: #f6f3ed;
+      --paper: rgba(255, 252, 246, 0.96);
+      --text: #171717;
+      --muted: #666155;
+      --line: rgba(23, 23, 23, 0.1);
+      --accent: #1d5fd2;
+      --accent-soft: rgba(29, 95, 210, 0.08);
+      --warm: #f3eee4;
+      --shadow: 0 28px 70px rgba(20, 18, 15, 0.09);
+      --slide-w: min(1400px, calc(100vw - 44px));
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(29, 95, 210, 0.08), transparent 24%),
+        linear-gradient(180deg, #f7f4ee 0%, #f0ebe1 100%);
+      font-family: "SF Pro Display", "PingFang SC", "Noto Sans SC", "Helvetica Neue", sans-serif;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      backdrop-filter: blur(18px);
+      background: rgba(247, 244, 238, 0.82);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topbar-inner {
+      width: var(--slide-w);
+      margin: 0 auto;
+      padding: 14px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .brand {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+    }
+
+    .nav a:hover {
+      color: var(--text);
+      border-color: var(--line);
+      background: rgba(255, 255, 255, 0.62);
+    }
+
+    main {
+      padding: 26px 0 68px;
+    }
+
+    .slide {
+      width: var(--slide-w);
+      aspect-ratio: 297 / 210;
+      min-height: auto;
+      margin: 0 auto 28px;
+      padding: 56px 60px 62px;
+      background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 250, 243, 0.95));
+      border: 1px solid rgba(23, 23, 23, 0.08);
+      border-radius: 32px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .slide::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(135deg, rgba(29, 95, 210, 0.045), transparent 30%),
+        linear-gradient(0deg, rgba(255,255,255,0.18), rgba(255,255,255,0));
+    }
+
+    .slide > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .eyebrow {
+      font-size: 13px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(52px, 6vw, 84px);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+      font-weight: 760;
+      max-width: 11em;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(40px, 4.8vw, 64px);
+      line-height: 1.02;
+      letter-spacing: -0.045em;
+      font-weight: 740;
+      max-width: 11.5em;
+    }
+
+    .subtitle {
+      margin-top: 18px;
+      max-width: 54em;
+      font-size: 18px;
+      line-height: 1.72;
+      color: var(--muted);
+    }
+
+    .hero-punch {
+      margin-top: 22px;
+      max-width: 18em;
+      font-size: clamp(28px, 3vw, 42px);
+      line-height: 1.2;
+      letter-spacing: -0.04em;
+      font-weight: 680;
+    }
+
+    .section {
+      margin-top: 26px;
+    }
+
+    .comparison,
+    .grid-2,
+    .grid-3,
+    .metrics {
+      display: grid;
+      gap: 18px;
+    }
+
+    .comparison,
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid-3,
+    .metrics {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card,
+    .quote-card {
+      padding: 22px 24px;
+      border-radius: 24px;
+      border: 1px solid rgba(23, 23, 23, 0.08);
+      background: rgba(255, 255, 255, 0.74);
+    }
+
+    .quote-card {
+      background: var(--accent-soft);
+      border-color: rgba(29, 95, 210, 0.16);
+    }
+
+    .card h3,
+    .quote-card h3 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .card p,
+    .quote-card p {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.48;
+      letter-spacing: -0.02em;
+      font-weight: 560;
+    }
+
+    .card ul,
+    .big-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .card li,
+    .big-list li {
+      position: relative;
+      padding-left: 18px;
+      font-size: 17px;
+      line-height: 1.62;
+      color: var(--text);
+    }
+
+    .card li::before,
+    .big-list li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.68em;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .big-list li {
+      font-size: 22px;
+      line-height: 1.5;
+      letter-spacing: -0.02em;
+      font-weight: 540;
+      padding-left: 22px;
+    }
+
+    .metrics .card strong {
+      display: block;
+      font-size: clamp(34px, 4vw, 54px);
+      line-height: 1;
+      letter-spacing: -0.05em;
+      margin-bottom: 10px;
+    }
+
+    .metrics .card span {
+      display: block;
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    .timeline {
+      display: grid;
+      gap: 14px;
+      margin-top: 24px;
+    }
+
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 108px 1fr;
+      gap: 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(23, 23, 23, 0.08);
+    }
+
+    .timeline-item:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .timeline-step {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding-top: 5px;
+    }
+
+    .timeline-item p {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.45;
+      letter-spacing: -0.02em;
+      font-weight: 560;
+    }
+
+    .timeline-item small {
+      display: block;
+      margin-top: 6px;
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--muted);
+      font-weight: 450;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--line);
+      margin: 24px 0;
+    }
+
+    .foot {
+      margin-top: auto;
+      padding-top: 28px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .page {
+      white-space: nowrap;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .appendix h2 {
+      font-size: clamp(34px, 4.2vw, 52px);
+    }
+
+    #slide-9 .section,
+    #slide-20 .section {
+      margin-top: 18px;
+    }
+
+    #slide-9 .card,
+    #slide-9 .quote-card,
+    #slide-20 .card,
+    #slide-20 .quote-card {
+      padding: 18px 20px;
+    }
+
+    #slide-9 .foot,
+    #slide-20 .foot {
+      padding-top: 18px;
+    }
+
+    #slide-9 .quote-card p {
+      font-size: 18px;
+      line-height: 1.38;
+    }
+
+    #slide-9 .metrics .card strong {
+      font-size: 42px;
+      margin-bottom: 8px;
+    }
+
+    #slide-9 .foot {
+      font-size: 13px;
+      line-height: 1.42;
+    }
+
+    @media (max-width: 980px) {
+      .slide {
+        padding: 42px 24px 48px;
+        aspect-ratio: auto;
+        min-height: auto;
+      }
+
+      .comparison,
+      .grid-2,
+      .grid-3,
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .timeline-item {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .topbar-inner {
+        width: calc(100vw - 24px);
+      }
+
+      .brand {
+        display: none;
+      }
+
+      .nav {
+        justify-content: flex-start;
+      }
+    }
+
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+
+    @media print {
+      html,
+      body {
+        width: 297mm;
+        height: 210mm;
+        background: #ffffff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .topbar {
+        display: none !important;
+      }
+
+      main {
+        padding: 0 !important;
+      }
+
+      .slide {
+        width: 297mm !important;
+        min-height: 210mm !important;
+        height: 210mm !important;
+        aspect-ratio: auto !important;
+        margin: 0 !important;
+        padding: 15mm 17mm 16mm !important;
+        border-radius: 0 !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        break-after: page;
+        page-break-after: always;
+        overflow: hidden !important;
+      }
+
+      .slide:last-child {
+        break-after: auto;
+        page-break-after: auto;
+      }
+
+      .slide::before {
+        inset: 0 !important;
+      }
+
+      h1 {
+        font-size: 41pt !important;
+        line-height: 0.96 !important;
+        max-width: 10.5em !important;
+      }
+
+      h2 {
+        font-size: 31pt !important;
+        line-height: 1.02 !important;
+        max-width: 11em !important;
+      }
+
+      .subtitle {
+        font-size: 12pt !important;
+        line-height: 1.52 !important;
+        max-width: 52em !important;
+      }
+
+      .hero-punch {
+        font-size: 21pt !important;
+        line-height: 1.18 !important;
+        max-width: 17em !important;
+      }
+
+      .card,
+      .quote-card {
+        padding: 16pt 18pt !important;
+        border-radius: 18pt !important;
+      }
+
+      .card h3,
+      .quote-card h3,
+      .eyebrow,
+      .timeline-step,
+      .page,
+      .brand,
+      .nav a {
+        font-size: 9pt !important;
+      }
+
+      .card p,
+      .quote-card p {
+        font-size: 14pt !important;
+        line-height: 1.34 !important;
+      }
+
+      .card li {
+        font-size: 10.8pt !important;
+        line-height: 1.42 !important;
+      }
+
+      .big-list li {
+        font-size: 13.5pt !important;
+        line-height: 1.32 !important;
+      }
+
+      .metrics .card strong {
+        font-size: 26pt !important;
+      }
+
+      .metrics .card span,
+      .timeline-item small,
+      .foot {
+        font-size: 9.6pt !important;
+        line-height: 1.4 !important;
+      }
+
+      .timeline {
+        gap: 10pt !important;
+        margin-top: 18pt !important;
+      }
+
+      .timeline-item {
+        grid-template-columns: 82pt 1fr !important;
+        gap: 12pt !important;
+        padding-bottom: 8pt !important;
+      }
+
+      .timeline-item p {
+        font-size: 14.5pt !important;
+        line-height: 1.28 !important;
+      }
+
+      .section {
+        margin-top: 16pt !important;
+      }
+
+      .comparison,
+      .grid-2,
+      .grid-3,
+      .metrics {
+        gap: 12pt !important;
+      }
+
+      .foot {
+        padding-top: 16pt !important;
+        margin-top: auto !important;
+      }
+
+      #slide-9 h2,
+      #slide-20 h2 {
+        font-size: 28pt !important;
+      }
+
+      #slide-9 .subtitle,
+      #slide-20 .subtitle {
+        font-size: 11pt !important;
+        line-height: 1.45 !important;
+      }
+
+      #slide-9 .section,
+      #slide-20 .section {
+        margin-top: 7pt !important;
+      }
+
+      #slide-9 .metrics,
+      #slide-20 .metrics {
+        gap: 9pt !important;
+      }
+
+      #slide-9 .card,
+      #slide-9 .quote-card,
+      #slide-20 .card,
+      #slide-20 .quote-card {
+        padding: 10pt 12pt !important;
+      }
+
+      #slide-9 .metrics .card strong,
+      #slide-20 .metrics .card strong {
+        font-size: 22pt !important;
+        margin-bottom: 6pt !important;
+      }
+
+      #slide-9 .metrics .card strong {
+        font-size: 18pt !important;
+        margin-bottom: 4pt !important;
+      }
+
+      #slide-9 .metrics .card span,
+      #slide-20 .metrics .card span {
+        font-size: 8.8pt !important;
+        line-height: 1.28 !important;
+      }
+
+      #slide-9 .quote-card p,
+      #slide-20 .quote-card p {
+        font-size: 12.5pt !important;
+        line-height: 1.26 !important;
+      }
+
+      #slide-9 .quote-card p {
+        font-size: 11.4pt !important;
+        line-height: 1.2 !important;
+      }
+
+      #slide-20 .card h3,
+      #slide-20 .quote-card h3 {
+        margin-bottom: 8pt !important;
+      }
+
+      #slide-20 .card li {
+        font-size: 9.8pt !important;
+        line-height: 1.3 !important;
+      }
+
+      #slide-9 .foot,
+      #slide-20 .foot {
+        font-size: 8.8pt !important;
+        line-height: 1.28 !important;
+        padding-top: 6pt !important;
+      }
+
+      #slide-9 .foot {
+        font-size: 8.1pt !important;
+        line-height: 1.18 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">Vibe Coding Retrospective</div>
+      <nav class="nav">
+        <a href="#slide-1">封面</a>
+        <a href="#slide-7">推进方式</a>
+        <a href="#slide-13">高光与翻车</a>
+        <a href="#slide-16">Prompt</a>
+        <a href="#slide-19">SOP</a>
+        <a href="#appendix-a">附录</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="slide" id="slide-1">
+      <div>
+        <div class="eyebrow">Vibe Coding Case Study</div>
+        <h1>我如何和 Codex 一起，<br />通过 vibe coding 做出一个应用</h1>
+        <div class="hero-punch">这不是一次“AI 帮我写代码”的展示。<br />这是一次“我如何把 AI 变成产品协作者”的复盘。</div>
+      </div>
+      <div class="comparison section">
+        <div class="quote-card">
+          <h3>项目对象</h3>
+          <p>一个把“业务会话归因聚类流程”工具化的小应用。</p>
+        </div>
+        <div class="quote-card">
+          <h3>分享重点</h3>
+          <p>不是产品本身，而是人机协作开发过程和可复用的方法。</p>
+        </div>
+      </div>
+      <div class="foot">
+        <div>关键词：零 coding 经验、AI 协作开发、产品化推进、vibe coding。</div>
+        <div class="page">01 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-2">
+      <div>
+        <div class="eyebrow">一句话结论</div>
+        <h2>这次最大的产出，不是一个应用。<br />而是一套可以复用的人机协作方式。</h2>
+        <div class="subtitle">产品当然做出来了，但真正值得复用的，是这套协作节奏：先收口需求和流程，再分阶段实现，再持续修正口径、状态和反馈。</div>
+      </div>
+      <div class="comparison section">
+        <div class="card">
+          <h3>表层结果</h3>
+          <ul>
+            <li>做出了本地可用的归因分析工作台。</li>
+            <li>主链路覆盖导入、提取、聚类、分类、处理其他、导出。</li>
+            <li>还有日志、配置、状态反馈和交互修整。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>深层结果</h3>
+          <ul>
+            <li>建立了“人负责判断，Codex 负责展开和执行”的协作边界。</li>
+            <li>形成了可复用的 SOP 和 prompt 组织方式。</li>
+            <li>证明了零 coding 背景也可以把想法推进成产品。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="quote-card section">
+        <p>真正被降低的，不只是 coding 门槛，而是把想法变成产品的门槛。</p>
+      </div>
+      <div class="foot">
+        <div>这一页的任务是先把分享重心拉高，不陷入“功能清单”。</div>
+        <div class="page">02 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-3">
+      <div>
+        <div class="eyebrow">为什么做这个应用</div>
+        <h2>这个项目不是为了“试试 AI”。<br />它解决的是一个真实的高频工作。</h2>
+        <div class="subtitle">面向产品经理自己处理业务会话洞察的场景，核心目标是把过去机械、繁琐、重复的归因聚类流程工具化，从而提效。</div>
+      </div>
+      <div class="grid-3 section">
+        <div class="card">
+          <h3>业务场景</h3>
+          <p>从大量会话里提炼不购买原因、归因类别、汇总结论。</p>
+        </div>
+        <div class="card">
+          <h3>现实痛点</h3>
+          <p>步骤多、重复度高、机械劳动重，但仍需要业务判断。</p>
+        </div>
+        <div class="card">
+          <h3>产品目标</h3>
+          <p>不是替代判断，而是让流程结构化、结果可复用、类别表可积累。</p>
+        </div>
+      </div>
+      <div class="foot">
+        <div>最适合用 vibe coding 做的，往往不是炫技项目，而是你自己真的反复在做的工作。</div>
+        <div class="page">03 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-4">
+      <div>
+        <div class="eyebrow">前一次为什么失败</div>
+        <h2>第一次没跑通，<br />不是因为 AI 不行。</h2>
+        <div class="hero-punch">真正的问题是：<br />流程边界不清，产品结构没定，系统没有闭环。</div>
+      </div>
+      <div class="comparison section">
+        <div class="card">
+          <h3>第一次尝试</h3>
+          <ul>
+            <li>在和 Codex 开始之前，已经用 opencode 做过一轮。</li>
+            <li>但当时没有把“工具到底该怎么工作”说清楚。</li>
+            <li>结果不是不会写，而是写不成一个能跑通的产品。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>第二次重来的变化</h3>
+          <ul>
+            <li>不是从零开始，而是基于失败成果重写 PRD。</li>
+            <li>先收口流程、对象、状态和导出，再开始 coding。</li>
+            <li>失败经验反而变成了第二次的起点资产。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="quote-card section">
+        <p>AI 会放大执行力，但不会替你补上缺失的产品结构。</p>
+      </div>
+      <div class="foot">
+        <div>这一页的价值是建立真实感，也自然引出后面的“结构化比写代码更重要”。</div>
+        <div class="page">04 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-5">
+      <div>
+        <div class="eyebrow">为什么这次选择 Codex</div>
+        <h2>我需要的不是代码生成器。<br />我需要的是一个能持续推进事情的协作者。</h2>
+        <div class="subtitle">这次不是一上来就让 AI 写代码，而是先围绕 PRD、产品边界、对象设计和实现路径展开讨论，再进入 coding。</div>
+      </div>
+      <div class="comparison section">
+        <div class="card">
+          <h3>如果只是“写代码”</h3>
+          <ul>
+            <li>我依然会卡在产品结构、流程边界和验收判断上。</li>
+            <li>代码写出来了，也不一定能形成一个好用的产品。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>这次真正发生的是</h3>
+          <ul>
+            <li>Codex 参与了需求澄清、方案收口、实现推进、debug 修正和文档沉淀。</li>
+            <li>它不是外包开发，而是整个推进过程中的高执行力搭档。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card section">
+        <h3>对零 coding 背景的人来说，最关键的价值</h3>
+        <ul>
+          <li>先把模糊目标谈清楚，再快速得到可以继续判断的产物。</li>
+          <li>每一轮都能继续推进，而不是卡在“我不知道下一步该做什么”。</li>
+        </ul>
+      </div>
+      <div class="foot">
+        <div>当目标还在收敛中时，你需要的不是更快写代码，而是更强的协作推进。</div>
+        <div class="page">05 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-6">
+      <div>
+        <div class="eyebrow">真实分工</div>
+        <h2>这不是“我把活丢给 AI”。<br />这是判断和执行的清晰分工。</h2>
+      </div>
+      <div class="comparison section">
+        <div class="card">
+          <h3>我负责</h3>
+          <ul>
+            <li>目标定义和问题选择。</li>
+            <li>流程判断、边界取舍、优先级排序。</li>
+            <li>统计口径、体验成立与否、最终验收。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Codex 负责</h3>
+          <ul>
+            <li>结构化拆解和工程骨架落地。</li>
+            <li>页面、服务端、数据库、日志、导出等实现工作。</li>
+            <li>定位问题、修复 bug、整理文档、压缩产物。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="quote-card section">
+        <p>判断权不外包，执行力被放大。这才是这次协作真正成立的前提。</p>
+      </div>
+      <div class="foot">
+        <div>一句话：人主导方向，AI 放大执行。</div>
+        <div class="page">06 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-7">
+      <div>
+        <div class="eyebrow">开发是怎么被推进起来的</div>
+        <h2>真正高效的不是“一把梭生成”。<br />而是把项目拆成阶段性闭环。</h2>
+      </div>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-step">阶段 1</div>
+          <div>
+            <p>先把产品结构谈清楚。</p>
+            <small>任务、批次、对话、类别、当前结果、步骤日志这些对象先被讲清楚。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">阶段 2</div>
+          <div>
+            <p>先搭工作台底座。</p>
+            <small>任务页、导入、类别表、数据库骨架先落下来，让讨论不再停留在抽象层。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">阶段 3</div>
+          <div>
+            <p>按主链路逐步接通核心能力。</p>
+            <small>提取、聚类、分类、处理其他、导出，一步一步接，而不是一次性生成。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">阶段 4</div>
+          <div>
+            <p>补日志和状态反馈。</p>
+            <small>日志页、进度条、按钮状态、保存提示、操作互斥这些体验层开始补齐。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">阶段 5</div>
+          <div>
+            <p>再做口径和分享层收尾。</p>
+            <small>统一计数口径、补配置入口、完善导出、沉淀 README、PRD 和分享演示稿。</small>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div>关键不是一次生成全栈，而是每一轮都形成一个可验证的小闭环。</div>
+        <div class="page">07 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-8">
+      <div>
+        <div class="eyebrow">关键决策 1</div>
+        <h2>首版先做“分析工作台”。<br />不做“黑盒自动化”。</h2>
+      </div>
+      <div class="comparison section">
+        <div class="card">
+          <h3>如果一开始就做全自动</h3>
+          <ul>
+            <li>一旦 Prompt、类别定义或“其他”策略不对，会很难排查。</li>
+            <li>错误没有中间结果可看，返工成本会变得很高。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>先做工作台的价值</h3>
+          <ul>
+            <li>每一步都能看输入、输出、状态和日志。</li>
+            <li>方便抽查、修 prompt、修类别表、修重跑策略。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card section">
+        <h3>这次为什么证明这个决策是对的</h3>
+        <ul>
+          <li>上传报错、统计不一致、处理其他无反馈这些问题，都依赖可检查的工作台结构才能快速定位。</li>
+          <li>首版如果做成黑盒，很可能根本不知道错在哪。</li>
+        </ul>
+      </div>
+      <div class="foot">
+        <div>在还不稳定的时候，先做可检查，比先做全自动更重要。</div>
+        <div class="page">08 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-9">
+      <div>
+        <div class="eyebrow">关键决策 2</div>
+        <h2>先把产品对象讲清楚，<br />很多工程问题就消失了。</h2>
+        <div class="subtitle">先把对象职责讲清楚，再写代码，系统会稳很多。</div>
+      </div>
+      <div class="metrics section">
+        <div class="card">
+          <strong>任务</strong>
+          <span>一套独立归因体系的容器。</span>
+        </div>
+        <div class="card">
+          <strong>批次</strong>
+          <span>一次上传的 CSV 和批次状态。</span>
+        </div>
+        <div class="card">
+          <strong>对话</strong>
+          <span>标准化后的原始会话记录。</span>
+        </div>
+      </div>
+      <div class="metrics section">
+        <div class="card">
+          <strong>类别表</strong>
+          <span>任务级长期资产，可持续迭代。</span>
+        </div>
+        <div class="card">
+          <strong>当前结果</strong>
+          <span>展示、统计、导出的当前生效结果。</span>
+        </div>
+        <div class="card">
+          <strong>步骤日志</strong>
+          <span>用于回溯、debug 和重跑。</span>
+        </div>
+      </div>
+      <div class="quote-card section">
+        <p>很多看起来像工程问题的问题，本质上是产品对象没有定义清楚。</p>
+      </div>
+      <div class="foot">
+        <div>关键收口：最终结果不能靠日志临时拼。</div>
+        <div class="page">09 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-10">
+      <div>
+        <div class="eyebrow">关键决策 3</div>
+        <h2>把抽象需求，变成一条清晰的实现链路。</h2>
+      </div>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-step">01</div>
+          <div>
+            <p>导入数据</p>
+            <small>上传 CSV、字段映射、UTF-8 校验、任务内去重、生成批次。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">02</div>
+          <div>
+            <p>提取不购买原因</p>
+            <small>要求 LLM 返回结构化 JSON：原因、原文引用、解释、是否存在原因。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">03</div>
+          <div>
+            <p>原因聚类并生成类别建议</p>
+            <small>先生成建议，再人工确认入表，避免类别表被直接污染。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">04</div>
+          <div>
+            <p>按类别表批量分类</p>
+            <small>只允许命中一个类别；命不中就进入“其他”。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">05</div>
+          <div>
+            <p>处理其他</p>
+            <small>只对“其他”局部重算，不整批重跑。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">06</div>
+          <div>
+            <p>汇总与导出</p>
+            <small>直接从当前结果表联原始对话导出，不靠过程日志拼。</small>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div>复杂应用不是一次写出来的，而是一条一条链路接出来的。</div>
+        <div class="page">10 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-11">
+      <div>
+        <div class="eyebrow">高光时刻 1</div>
+        <h2>从需求讨论，到快速搭出工作台底座。</h2>
+        <div class="subtitle">Codex 很强的一个价值，是能把产品讨论快速压缩成一个可运行的工程骨架。</div>
+      </div>
+      <div class="metrics section">
+        <div class="card">
+          <strong>工程初始化</strong>
+          <span>很快落下 Next.js、TypeScript、SQLite、Prisma 的本地单体结构。</span>
+        </div>
+        <div class="card">
+          <strong>页面骨架</strong>
+          <span>任务列表页、任务详情页、类别表、批次导入很快成形。</span>
+        </div>
+        <div class="card">
+          <strong>正反馈</strong>
+          <span>你很快从“抽象讨论”切换到“能点、能看、能判断”的状态。</span>
+        </div>
+      </div>
+      <div class="card section">
+        <h3>为什么这一步对零 coding 背景特别重要</h3>
+        <ul>
+          <li>以前最容易卡住的是“我根本不知道应该从哪开始”。</li>
+          <li>这次你可以先把问题讲清楚，然后很快获得一个能继续判断的壳子。</li>
+        </ul>
+      </div>
+      <div class="foot">
+        <div>从“想法”到“有壳可点”，中间的距离第一次变得这么短。</div>
+        <div class="page">11 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-12">
+      <div>
+        <div class="eyebrow">高光时刻 2</div>
+        <h2>主链路不是一把梭生成的。<br />它是按阶段被接通的。</h2>
+      </div>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-step">里程碑 A</div>
+          <div>
+            <p>接通原因提取</p>
+            <small>`step_runs`、`llm_call_logs`、当前生效结果表一起落库。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">里程碑 B</div>
+          <div>
+            <p>接通原因聚类</p>
+            <small>先生成类别建议，再人工确认入正式类别表。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">里程碑 C</div>
+          <div>
+            <p>接通批量分类</p>
+            <small>按当前类别表逐条归类，命不中统一进入“其他”。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">里程碑 D</div>
+          <div>
+            <p>接通处理其他</p>
+            <small>只对“其他”局部重算，形成真正闭环。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">里程碑 E</div>
+          <div>
+            <p>补汇总、导出和日志页</p>
+            <small>从“能跑”升级到“能排查、能复盘”。</small>
+          </div>
+        </div>
+      </div>
+      <div class="quote-card section">
+        <p>AI 协作最强的地方，不是替你跳过过程，而是把过程压缩得足够快。</p>
+      </div>
+      <div class="foot">
+        <div>每一轮都只有一个清晰目标，所以零经验的人也能跟得上推进节奏。</div>
+        <div class="page">12 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-13">
+      <div>
+        <div class="eyebrow">高光时刻 3</div>
+        <h2>首版不可能全对。<br />但修正速度真的很高。</h2>
+        <div class="subtitle">这次体验好的地方，不是没有 bug，而是 bug 一旦被明确，就能快速定位、解释、修改和验证。</div>
+      </div>
+      <div class="comparison section">
+        <div class="card">
+          <h3>典型问题</h3>
+          <ul>
+            <li>上传流程因 Server Action 机制出现 runtime error。</li>
+            <li>“7 个其他 vs 5 个其他”暴露出统计口径不一致。</li>
+            <li>“处理其他没反应”其实是有逻辑但缺乏反馈。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>典型修复</h3>
+          <ul>
+            <li>上传改成标准 `multipart/form-data` 路由。</li>
+            <li>统一所有批次卡片的计数口径。</li>
+            <li>补运行状态、完成提示、进度条和互斥禁用。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card section">
+        <h3>这类修正为什么很有代表性</h3>
+        <ul>
+          <li>说明 AI 协作真正有杠杆的，不只是“生成”，还有“持续修正”。</li>
+          <li>一个 MVP 是在多轮修正后才从“能跑”变成“能用”的。</li>
+        </ul>
+      </div>
+      <div class="foot">
+        <div>速度不只体现在生成，更体现在修正。</div>
+        <div class="page">13 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-14">
+      <div>
+        <div class="eyebrow">翻车时刻 1</div>
+        <h2>有逻辑，不等于有体验。<br />如果用户感知不到状态，功能就像不存在。</h2>
+      </div>
+      <div class="card section">
+        <h3>这次暴露出来的典型问题</h3>
+        <ul class="big-list">
+          <li>“处理其他”其实执行成功了，但页面没有反馈，用户会以为按钮坏了。</li>
+          <li>配置保存已经生效了，但没有成功提示，用户不知道有没有改成功。</li>
+          <li>提取、分类、聚类在 mock 下看起来很快，但正式接 LLM 时没有进度条就会显得像“卡住”。</li>
+        </ul>
+      </div>
+      <div class="quote-card section">
+        <p>AI 很容易先把“后端逻辑存在”做出来。但产品能不能被信任，常常取决于状态反馈有没有补齐。</p>
+      </div>
+      <div class="foot">
+        <div>这类问题不是技术 bug，而是产品是否成立的问题。</div>
+        <div class="page">14 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-15">
+      <div>
+        <div class="eyebrow">翻车时刻 2</div>
+        <h2>复杂产品里，最容易出错的，<br />往往不是大逻辑，而是口径一致性。</h2>
+      </div>
+      <div class="comparison section">
+        <div class="card">
+          <h3>问题表象</h3>
+          <ul>
+            <li>同一批次在 Step 4 看到 7 个“其他”。</li>
+            <li>但在 Step 5 里又只显示 5 个“其他”。</li>
+            <li>用户自然会怀疑是不是数据出了问题。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>根因解释</h3>
+          <ul>
+            <li>一处用了任务级总计数。</li>
+            <li>一处用了批次级计数。</li>
+            <li>所以不是数据丢了，而是统计口径混了。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="quote-card section">
+        <p>AI 能很快实现模块，但如果口径没有被你持续校准，页面就会出现“每块都对、整体不对”的问题。</p>
+      </div>
+      <div class="foot">
+        <div>这类问题尤其需要人来发现，因为它往往不会报错，只会“看起来不对”。</div>
+        <div class="page">15 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-16">
+      <div>
+        <div class="eyebrow">Prompt 如何进化</div>
+        <h2>真正有效的 prompt，<br />不是更长，而是更像任务书。</h2>
+      </div>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-step">阶段 1</div>
+          <div>
+            <p>模糊愿望</p>
+            <small>“帮我做个归因聚类的小工具。”这类说法只够开始，不够稳定推进。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">阶段 2</div>
+          <div>
+            <p>结构化需求</p>
+            <small>开始明确目标用户、输入输出、页面流程、任务边界和首版范围。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">阶段 3</div>
+          <div>
+            <p>产品级说明</p>
+            <small>明确对象、状态机、日志、导出字段、步骤职责、不可做项和分阶段交付方式。</small>
+          </div>
+        </div>
+      </div>
+      <div class="card section">
+        <h3>这次最有效的 prompt 共性</h3>
+        <ul>
+          <li>目标清楚：到底是做产品，还是只回答问题。</li>
+          <li>边界清楚：先做什么、后做什么、暂时不做什么。</li>
+          <li>格式清楚：要按阶段交付，要有明确字段和结构。</li>
+        </ul>
+      </div>
+      <div class="foot">
+        <div>从“帮我做个工具”到“请按三个阶段交付”，中间差的不是字数，是结构。</div>
+        <div class="page">16 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-17">
+      <div>
+        <div class="eyebrow">哪些任务适合交给 Codex</div>
+        <h2>AI 适合展开。<br />人与人最难替代的是判断。</h2>
+      </div>
+      <div class="comparison section">
+        <div class="card">
+          <h3>更适合交给 Codex</h3>
+          <ul>
+            <li>工程骨架和数据模型落地。</li>
+            <li>页面、接口、数据库、日志和导出等结构化实现。</li>
+            <li>bug 定位、修复、文档整理、内容压缩与重组。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>必须由人主导</h3>
+          <ul>
+            <li>做不做这个产品、首版做什么。</li>
+            <li>流程是否合理、统计口径是否正确。</li>
+            <li>体验是否成立、什么时候该收口、什么时候该返工。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="quote-card section">
+        <p>不要把 Codex 当代码外包。要把它当一个高执行力的协作者。</p>
+      </div>
+      <div class="foot">
+        <div>分工越清楚，协作杠杆越大；边界越模糊，返工越多。</div>
+        <div class="page">17 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-18">
+      <div>
+        <div class="eyebrow">最终结果</div>
+        <h2>最后做出来的，不是模型壳子。<br />而是一个分步骤、可回溯的工作台。</h2>
+        <div class="subtitle">最终产品不是“上传数据后一键给答案”的黑盒，而是一个更适合首版真实使用的本地分析工作台。</div>
+      </div>
+      <div class="comparison section">
+        <div class="card">
+          <h3>最初设想更像</h3>
+          <ul>
+            <li>一个自动化很强的归因聚类工具。</li>
+            <li>更偏“上传后跑完整流程”。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>最终实际落地</h3>
+          <ul>
+            <li>一个分步骤、可检查、可修正、可导出的本地工作台。</li>
+            <li>任务管理、CSV 导入、类别表、提取、聚类、分类、处理其他、日志、导出全部接通。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card section">
+        <h3>为什么这反而更合理</h3>
+        <ul>
+          <li>因为这类产品在首版阶段最需要的是稳定、可检查、可追踪，而不是黑盒自动化。</li>
+          <li>后续如果要自动化，也是在这套稳定流程之上继续演进。</li>
+        </ul>
+      </div>
+      <div class="foot">
+        <div>最终成品往往不是最初想象的样子，而是被真实问题塑形出来的样子。</div>
+        <div class="page">18 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-19">
+      <div>
+        <div class="eyebrow">方法论沉淀</div>
+        <h2>如果要复用这次经验，<br />最值得拿走的是一套 SOP。</h2>
+      </div>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-step">01</div>
+          <div>
+            <p>先选一个你自己真的反复在做的流程。</p>
+            <small>不要先做想象中的 AI 产品，先做你自己最痛的高频工作。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">02</div>
+          <div>
+            <p>不必充分准备好再开始。</p>
+            <small>但要在推进中尽快把流程、对象和边界讲清楚。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">03</div>
+          <div>
+            <p>先做可检查的工作台，不做黑盒自动化。</p>
+            <small>中间结果和日志，是你后续所有修正能力的基础。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">04</div>
+          <div>
+            <p>按阶段闭环，不追求一次性生成。</p>
+            <small>每一轮只追一个清晰验收点，降低复杂度和焦虑感。</small>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-step">05</div>
+          <div>
+            <p>持续检查状态、口径、反馈和交互。</p>
+            <small>不要只看“功能逻辑存在”，要看“用户体验是否成立”。</small>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        <div>先结构化问题，再让 AI 加速执行。</div>
+        <div class="page">19 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-20">
+      <div>
+        <div class="eyebrow">结尾</div>
+        <h2>给第一次用 Codex 做项目的人，<br />我最想留三句话。</h2>
+      </div>
+      <div class="metrics section">
+        <div class="card">
+          <strong>1</strong>
+          <span>不必充分准备好再开始。先开始，边做边收口。</span>
+        </div>
+        <div class="card">
+          <strong>2</strong>
+          <span>你有没有把结构和流程想清楚，仍然最重要。</span>
+        </div>
+        <div class="card">
+          <strong>3</strong>
+          <span>当前 AI coding 已经把 coding 门槛拉得很低。</span>
+        </div>
+      </div>
+      <div class="quote-card section">
+        <p>不用先成为工程师。先成为一个会定义问题、会收口的人。</p>
+      </div>
+      <div class="card section">
+        <h3>这次我最想分享的不是</h3>
+        <ul>
+          <li>“我做出了一个产品”。</li>
+        </ul>
+        <h3 style="margin-top:18px;">而是</h3>
+        <ul>
+          <li>“我如何用 Codex，把一个应用从想法快速推进到可用状态”。</li>
+        </ul>
+      </div>
+      <div class="foot">
+        <div>这也是这次案例真正值得传播的部分。</div>
+        <div class="page">20 / 20</div>
+      </div>
+    </section>
+
+    <section class="slide appendix" id="appendix-a">
+      <div>
+        <div class="eyebrow">附录 A</div>
+        <h2>素材补采清单</h2>
+      </div>
+      <div class="grid-3 section">
+        <div class="card">
+          <h3>必须补</h3>
+          <ul>
+            <li>最终任务工作台截图。</li>
+            <li>最能证明“最后真的做出了一个可用产品”。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>建议补</h3>
+          <ul>
+            <li>第一次失败与重写 PRD 的对比。</li>
+            <li>最能说明“失败经验如何提升第二次起点”。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>可选补</h3>
+          <ul>
+            <li>典型 bug 修复前后对比。</li>
+            <li>最能展示 AI 协作的修正速度。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot">
+        <div>如果不补素材，这页可以直接跳过，不影响主线表达。</div>
+        <div class="page">Appendix</div>
+      </div>
+    </section>
+
+    <section class="slide appendix" id="appendix-b">
+      <div>
+        <div class="eyebrow">附录 B</div>
+        <h2>10 分钟分享版删减建议</h2>
+      </div>
+      <div class="card section">
+        <h3>建议保留</h3>
+        <ul>
+          <li>1、2、3、4、6、8、13、16、19、20。</li>
+          <li>这 10 页足够讲清背景、失败、分工、关键决策、高光、Prompt 和 SOP。</li>
+        </ul>
+      </div>
+      <div class="card section">
+        <h3>建议合并</h3>
+        <ul>
+          <li>11 和 12 合并为“高光时刻”。</li>
+          <li>14 和 15 合并为“翻车与教训”。</li>
+        </ul>
+      </div>
+      <div class="card section">
+        <h3>建议一句话带过</h3>
+        <ul>
+          <li>数据库对象、附录类说明、产品功能的细节清单。</li>
+        </ul>
+      </div>
+      <div class="foot">
+        <div>10 分钟版本的重点不是完整，而是让听众带走一个清晰方法。</div>
+        <div class="page">Appendix</div>
+      </div>
+    </section>
+
+    <section class="slide appendix" id="appendix-c">
+      <div>
+        <div class="eyebrow">附录 C</div>
+        <h2>最值得传播的金句</h2>
+      </div>
+      <div class="grid-2 section">
+        <div class="quote-card">
+          <p>真正被降低的，不只是 coding 门槛，而是把想法变成产品的门槛。</p>
+        </div>
+        <div class="quote-card">
+          <p>AI 会放大执行力，但不会替你补上缺失的产品结构。</p>
+        </div>
+        <div class="quote-card">
+          <p>当目标还在收敛中时，你需要的不是更快写代码，而是更强的协作推进。</p>
+        </div>
+        <div class="quote-card">
+          <p>复杂应用不是被一次性写出来的，而是被一条一条链路接出来的。</p>
+        </div>
+        <div class="quote-card">
+          <p>先结构化问题，再让 AI 加速执行。</p>
+        </div>
+        <div class="quote-card">
+          <p>不用先成为工程师。先成为一个会定义问题、会收口的人。</p>
+        </div>
+      </div>
+      <div class="foot">
+        <div>这些句子可以直接拿去做页标题、演讲收束或对外传播文案。</div>
+        <div class="page">Appendix</div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

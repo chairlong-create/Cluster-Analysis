@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { getAppSettings } from "@/lib/app-config";
-import { buildCategoryMergePrompt, getCategoryMergeSystemPrompt } from "@/lib/prompts/category-merge";
+import { buildCategoryMergeSystemPrompt, getCategoryMergeUserPrompt } from "@/lib/prompts/category-merge";
 
 type MergeCategoryInput = {
   name: string;
@@ -52,7 +52,7 @@ function extractJsonBlock(content: string) {
 }
 
 function createMockMerge(categories: MergeCategoryInput[], maxTargetCount: number): CategoryMergeResponse {
-  const promptText = buildCategoryMergePrompt(categories, maxTargetCount);
+  const promptText = buildCategoryMergeSystemPrompt(categories, maxTargetCount);
 
   const mergedCategories =
     categories.length <= maxTargetCount
@@ -90,7 +90,8 @@ export async function mergeCategoriesWithMiniMax(
   const apiKey = settings.llmApiKey;
   const baseUrl = settings.llmBaseUrl;
   const model = settings.llmModel;
-  const promptText = buildCategoryMergePrompt(categories, maxTargetCount);
+  const systemPrompt = buildCategoryMergeSystemPrompt(categories, maxTargetCount);
+  const userPrompt = getCategoryMergeUserPrompt();
 
   if (!apiKey) {
     return createMockMerge(categories, maxTargetCount);
@@ -107,8 +108,8 @@ export async function mergeCategoriesWithMiniMax(
       model,
       temperature: 0.2,
       messages: [
-        { role: "system", content: getCategoryMergeSystemPrompt() },
-        { role: "user", content: promptText },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
       response_format: {
         type: "json_object",
@@ -124,7 +125,7 @@ export async function mergeCategoriesWithMiniMax(
     return {
       mergedCategories: [],
       log: {
-        promptText,
+        promptText: systemPrompt,
         responseText,
         status: "failed",
         latencyMs,
@@ -151,7 +152,7 @@ export async function mergeCategoriesWithMiniMax(
       sourceCategoryNames: item.source_category_names.map((name) => name.trim()).filter(Boolean),
     })),
     log: {
-      promptText,
+      promptText: systemPrompt,
       responseText,
       status: "succeeded",
       latencyMs,

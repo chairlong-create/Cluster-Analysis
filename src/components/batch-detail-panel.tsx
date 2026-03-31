@@ -145,6 +145,7 @@ export function BatchDetailPanel({
     confirmedSuggestions.length === 0 &&
     viewStage === "cluster";
   const extractFailedCount = extractRun?.failedCount ?? 0;
+  const classifyFailedCount = classifyRun?.failedCount ?? 0;
 
   const primaryAction =
     batch.workflowMode === "classify_only"
@@ -364,12 +365,37 @@ export function BatchDetailPanel({
             </div>
           ) : null}
           {primaryAction ? (
-            <AsyncStepButton
-              endpoint={primaryAction.endpoint}
-              label={primaryAction.label}
-              disabled={Boolean(conflictReason)}
-              disabledReason={conflictReason ?? undefined}
-            />
+            primaryAction.endpoint.includes("/classify") && classifyFailedCount > 0 ? (
+              <div className="stack compactStack">
+                <div className="actionRow">
+                  <AsyncStepButton
+                    endpoint={primaryAction.endpoint}
+                    label={primaryAction.label}
+                    disabled={Boolean(conflictReason)}
+                    disabledReason={conflictReason ?? undefined}
+                  />
+                  <AsyncStepButton
+                    endpoint={`/api/tasks/${taskId}/batches/${batch.id}/classify/retry-failed`}
+                    label="失败重试"
+                    className="ghostButton"
+                    disabled={Boolean(conflictReason)}
+                    disabledReason={conflictReason ?? undefined}
+                  />
+                </div>
+                {conflictReason ? <p className="hint">{conflictReason}</p> : null}
+                <p className="hint">
+                  当前这轮批量分类已完成
+                  {classifyRun?.failedCount ? `，其中 ${classifyRun.failedCount} 条失败` : ""}。你可以重新批量分类全部记录，或只重试失败条目。
+                </p>
+              </div>
+            ) : (
+              <AsyncStepButton
+                endpoint={primaryAction.endpoint}
+                label={primaryAction.label}
+                disabled={Boolean(conflictReason)}
+                disabledReason={conflictReason ?? undefined}
+              />
+            )
           ) : null}
           {batch.workflowMode === "seed" && pendingSuggestions.length ? (
             <div className="stack compactStack">

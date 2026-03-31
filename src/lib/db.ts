@@ -105,6 +105,8 @@ function initialize(db: Database.Database) {
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
       FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE CASCADE
     );
+    CREATE INDEX IF NOT EXISTS idx_step_runs_task_step_started_at ON step_runs(task_id, step_type, started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_step_runs_status_step_type ON step_runs(status, step_type);
 
     CREATE TABLE IF NOT EXISTS step_run_items (
       id TEXT PRIMARY KEY,
@@ -117,6 +119,7 @@ function initialize(db: Database.Database) {
       FOREIGN KEY (step_run_id) REFERENCES step_runs(id) ON DELETE CASCADE,
       FOREIGN KEY (dialog_id) REFERENCES dialogs(id) ON DELETE SET NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_step_run_items_run_created_at ON step_run_items(step_run_id, created_at DESC);
 
     CREATE TABLE IF NOT EXISTS llm_call_logs (
       id TEXT PRIMARY KEY,
@@ -135,6 +138,8 @@ function initialize(db: Database.Database) {
       FOREIGN KEY (step_run_id) REFERENCES step_runs(id) ON DELETE CASCADE,
       FOREIGN KEY (dialog_id) REFERENCES dialogs(id) ON DELETE SET NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_llm_call_logs_run_created_at ON llm_call_logs(step_run_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_llm_call_logs_run_status ON llm_call_logs(step_run_id, status);
 
     CREATE TABLE IF NOT EXISTS category_suggestions (
       id TEXT PRIMARY KEY,
@@ -188,6 +193,13 @@ function initialize(db: Database.Database) {
       FOREIGN KEY (to_category_id) REFERENCES categories(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_category_merge_mappings_task_run ON category_merge_mappings(task_id, merge_run_id);
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_results_task_updated_at
+      ON dialog_analysis_results(task_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_results_task_category_snapshot_batch
+      ON dialog_analysis_results(task_id, category_name_snapshot, batch_id);
   `);
 
   db.prepare(`
