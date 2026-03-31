@@ -40,7 +40,22 @@
 - npm 11+ 推荐
 - macOS / Linux / Windows 都可本地运行
 
+如果本机还没有安装 Node.js / npm：
+
+- 去 [nodejs.org](https://nodejs.org/) 下载并安装最新 `LTS`
+- 安装 Node.js 时，npm 会一起安装，不需要单独再装
+- 安装完成后，用 `node -v` 和 `npm -v` 确认版本
+
+如果你只是想把项目跑起来，而不是自己折腾技术细节，优先看：
+
+- [docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
+
 ## 快速开始
+
+如果你是第一次接触这个项目，建议分两种情况：
+
+- 小白部署：直接看 [docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
+- 开发者本地运行：按下面步骤
 
 1. 安装依赖
 
@@ -48,48 +63,52 @@
 npm install
 ```
 
-2. 复制环境变量模板
+2. 如需自定义本地数据库或默认模型，再修改 `.env`
 
-```bash
-cp .env.example .env
-```
-
-Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-3. 根据本机环境修改 `.env`
-
-最少只需要配置：
+最少通常只需要配置：
 
 - `DATABASE_FILE`
 
+模型 API Key、Base URL、Model 名称，优先建议在工具前端页面里配置。  
+`.env` 更适合做本机默认值或高级配置。
+
 如果只想演示流程，不接真实模型，也可以不填 API Key，系统会自动走 mock 模式。
 
-4. 安装后做一次基础检查
+3. 安装后做一次基础检查
 
 ```bash
 npm run lint
 npm test
 ```
 
-5. 启动开发环境
+4. 启动开发环境
 
 ```bash
 npm run dev
 ```
 
-6. 打开浏览器
+5. 打开浏览器
 
 ```text
 http://localhost:3000
 ```
 
+6. 进入首页后，在前端页面里配置：
+
+- 模型供应商对应的 API Key
+- Base URL
+- Model 名称
+- Prompt
+
 ## 配置说明
 
 见 [/.env.example](/Users/chenlong/vibe%20coding/Cluster%20Analysis/.env.example)。
+
+说明：
+
+- 首页里的“模型与并发配置”是普通用户最常用的入口
+- `.env` 主要用于设置本机默认值、数据库位置和高级参数
+- 如果首页和 `.env` 同时配置了同一项，优先以首页保存的值为准
 
 核心配置项：
 
@@ -304,10 +323,10 @@ npm test
 如果你是第一次接手这个项目，建议按下面顺序看：
 
 1. [README.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/README.md)
-2. [docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
-3. [docs/使用手册.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
-4. [docs/PRD.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/PRD.md)
-5. [docs/handoff-2026-03-28.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/handoff-2026-03-28.md)
+2. 如果是零基础同事，先看 [docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
+3. 再看 [docs/使用手册.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
+4. 需要理解需求背景时，再看 [docs/PRD.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/PRD.md)
+5. 需要理解历史决策和问题排查时，再看 [docs/handoff-2026-03-28.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/handoff-2026-03-28.md)
 
 ## 已知限制
 
@@ -319,10 +338,11 @@ npm test
 
 ## 给同事分发时的建议
 
-- 把仓库代码和 `.env.example` 发给同事
+- 直接把仓库地址和这份说明发给同事：[docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
+- 明确告诉同事本机建议版本：`Node.js 24+`、`npm 11+`
 - 不要共享你的 `.env`
-- 让每位同事在自己的机器上填写 API Key
+- 让每位同事在工具前端页面里填写自己的 API Key、Base URL 和 Model
 - 建议每位同事单独设置自己的 `DATABASE_FILE`
+- 如果对方是零基础，不要先让他看 `.env.example`，先让他按部署说明把网页跑起来
 - 首次启动前先跑 `npm install && npm run lint && npm test`
-- 推荐直接把这份说明发给同事：[docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
 - 首次使用前，先让同事看一遍 [docs/使用手册.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
