@@ -50,6 +50,8 @@
 
 - [docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
 
+如果你已经装过旧版本，只是想升级到最新版，也直接看这份文档里的“老用户如何升级到最新版”章节。
+
 ## 快速开始
 
 如果你是第一次接触这个项目，建议分两种情况：
@@ -380,6 +382,7 @@ npm test
 ## 给同事分发时的建议
 
 - 直接把仓库地址和这份说明发给同事：[docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
+- 如果对方已经装过旧版本，提醒他直接看这份说明里的“老用户如何升级到最新版”
 - 明确告诉同事本机建议版本：`Node.js 24+`、`npm 11+`
 - 不要共享你的 `.env`
 - 让每位同事在工具前端页面里填写自己的 API Key、Base URL 和 Model
