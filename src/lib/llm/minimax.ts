@@ -1,7 +1,8 @@
-import { getAppSettings } from "@/lib/app-config";
+import type { AppSettings } from "@/lib/app-config";
 import { parseExtractionResponse } from "@/lib/llm/extraction-parser";
 import type { ExtractionRequest, ExtractionResult, ProviderExtractionResponse } from "@/lib/llm/types";
 import { buildExtractionSystemPrompt, getExtractionUserPrompt } from "@/lib/prompts/extraction";
+import type { PromptSettings } from "@/lib/prompt-config";
 
 function createMockResponse(request: ExtractionRequest): ProviderExtractionResponse {
   const text = request.text.replace(/\s+/g, "");
@@ -51,7 +52,7 @@ function createMockResponse(request: ExtractionRequest): ProviderExtractionRespo
   return {
     result,
     log: {
-      promptText: buildExtractionSystemPrompt(request),
+      promptText: "[mock] extraction prompt",
       responseText: JSON.stringify(result),
       status: "succeeded",
       latencyMs: 0,
@@ -63,12 +64,13 @@ function createMockResponse(request: ExtractionRequest): ProviderExtractionRespo
 
 export async function extractReasonWithMiniMax(
   request: ExtractionRequest,
+  settings: AppSettings,
+  promptSettings: PromptSettings,
 ): Promise<ProviderExtractionResponse> {
-  const settings = getAppSettings();
   const apiKey = settings.llmApiKey;
   const baseUrl = settings.llmBaseUrl;
   const model = settings.llmModel;
-  const systemPrompt = buildExtractionSystemPrompt(request);
+  const systemPrompt = buildExtractionSystemPrompt(request, promptSettings);
   const userPrompt = getExtractionUserPrompt();
 
   if (!apiKey) {

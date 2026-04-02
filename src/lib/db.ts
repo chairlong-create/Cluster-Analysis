@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import bcrypt from "bcryptjs";
 
 const databaseFile = process.env.DATABASE_FILE || "/Users/chenlong/cluster-analysis-dev.db";
 
@@ -9,8 +10,19 @@ const globalForDb = globalThis as {
 function initialize(db: Database.Database) {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  db.pragma("busy_timeout = 5000");
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      display_name TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL DEFAULT 'user',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -159,9 +171,12 @@ function initialize(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_category_suggestions_task_batch ON category_suggestions(task_id, batch_id, created_at DESC);
 
     CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      key TEXT NOT NULL,
       value TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, key),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS category_merge_suggestion_items (
@@ -217,6 +232,7 @@ function initialize(db: Database.Database) {
 
   const hasAnalysisGoal = taskColumns.some((column) => column.name === "analysis_goal");
   const hasAnalysisFocusLabel = taskColumns.some((column) => column.name === "analysis_focus_label");
+  const hasUserId = taskColumns.some((column) => column.name === "user_id");
   const hasWorkflowMode = batchColumns.some((column) => column.name === "workflow_mode");
   const stepRunColumns = db
     .prepare(`PRAGMA table_info(step_runs)`)
@@ -237,6 +253,14 @@ function initialize(db: Database.Database) {
     `);
   }
 
+  if (!hasUserId) {
+    db.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN user_id TEXT REFERENCES users(id)
+    `);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id)`);
+  }
+
   if (!hasWorkflowMode) {
     db.exec(`
       ALTER TABLE batches
@@ -249,6 +273,60 @@ function initialize(db: Database.Database) {
       ALTER TABLE step_runs
       ADD COLUMN last_heartbeat_at TEXT
     `);
+  }
+
+  // Migrate legacy app_settings (flat key-value) to user-scoped format
+  const legacyTableExists = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='app_settings_legacy'`)
+    .get();
+  const appSettingsCols = db
+    .prepare(`PRAGMA table_info(app_settings)`)
+    .all() as Array<{ name: string }>;
+  const appSettingsHasUserId = appSettingsCols.some((c) => c.name === "user_id");
+
+  if (!appSettingsHasUserId && !legacyTableExists) {
+    // Old schema detected: rename and recreate
+    db.exec(`ALTER TABLE app_settings RENAME TO app_settings_legacy`);
+    db.exec(`
+      CREATE TABLE app_settings (
+        user_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, key),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+  }
+
+  // Seed admin user if none exists
+  const adminExists = db.prepare(`SELECT 1 FROM users WHERE role = 'admin' LIMIT 1`).get();
+  if (!adminExists) {
+    const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+    const adminId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const hash = bcrypt.hashSync(adminPassword, 10);
+    const inserted = db.prepare(`
+      INSERT OR IGNORE INTO users (id, username, password_hash, display_name, role, created_at, updated_at)
+      VALUES (?, 'admin', ?, '管理员', 'admin', ?, ?)
+    `).run(adminId, hash, now, now);
+
+    if (inserted.changes > 0) {
+      // Migrate legacy settings to admin user
+      const hasLegacy = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='app_settings_legacy'`)
+        .get();
+      if (hasLegacy) {
+        db.exec(`
+          INSERT INTO app_settings (user_id, key, value, updated_at)
+          SELECT '${adminId}', key, value, updated_at FROM app_settings_legacy
+        `);
+        db.exec(`DROP TABLE IF EXISTS app_settings_legacy`);
+      }
+
+      // Assign orphan tasks to admin
+      db.prepare(`UPDATE tasks SET user_id = ? WHERE user_id IS NULL`).run(adminId);
+    }
   }
 }
 

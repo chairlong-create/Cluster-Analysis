@@ -1,4 +1,4 @@
-import { getPromptSettings, renderPromptTemplate } from "@/lib/prompt-config";
+import { renderPromptTemplate, type PromptSettings } from "@/lib/prompt-config";
 
 type CategoryInput = {
   id: string;
@@ -13,8 +13,8 @@ export function buildClassificationSystemPrompt(input: {
   categories: CategoryInput[];
   analysisGoal: string;
   analysisFocusLabel: string;
-}) {
-  return renderPromptTemplate(getPromptSettings().classificationSystemPrompt, {
+}, promptSettings: PromptSettings) {
+  return renderPromptTemplate(promptSettings.classificationSystemPrompt, {
     category_list: input.categories
       .map((category, index) => `${index + 1}. ${category.name}: ${category.definition}`)
       .join("\n"),

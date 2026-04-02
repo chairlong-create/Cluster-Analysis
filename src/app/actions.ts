@@ -22,6 +22,7 @@ import { runBatchClassification } from "@/lib/classification-service";
 import { runReasonExtraction } from "@/lib/extraction-service";
 import { importBatchesFromFormData } from "@/lib/import-service";
 import { iterateOtherDialogs } from "@/lib/iterate-others-service";
+import { getCurrentUser, assertTaskOwnership } from "@/lib/current-user";
 
 const createTaskSchema = z.object({
   name: z.string().trim().min(1, "任务名称不能为空").max(100, "任务名称过长"),
@@ -153,7 +154,7 @@ function removeCategoryWithFallbackToOther(taskId: string, categoryId: string): 
   if (category.isOther) {
     return {
       ok: false,
-      error: "系统保留类别“其他”不能删除",
+      error: '系统保留类别"其他"不能删除',
     };
   }
 
@@ -190,7 +191,7 @@ function removeCategoryWithFallbackToOther(taskId: string, categoryId: string): 
     if (!otherCategory) {
       return {
         ok: false,
-        error: "当前任务缺少系统类别“其他”，无法执行拆解回流",
+        error: '当前任务缺少系统类别"其他"，无法执行拆解回流',
       };
     }
 
@@ -237,6 +238,8 @@ function removeCategoryWithFallbackToOther(taskId: string, categoryId: string): 
 }
 
 export async function createTaskAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = createTaskSchema.safeParse({
     name: formData.get("name"),
     description: formData.get("description") || undefined,
@@ -252,10 +255,10 @@ export async function createTaskAction(formData: FormData) {
 
   const insertTask = db.prepare(`
     INSERT INTO tasks (
-      id, name, description, llm_provider, analysis_goal, analysis_focus_label, created_at, updated_at
+      id, name, description, llm_provider, analysis_goal, analysis_focus_label, user_id, created_at, updated_at
     )
     VALUES (
-      @id, @name, @description, 'OpenAI-compatible', @analysisGoal, @analysisFocusLabel, @createdAt, @updatedAt
+      @id, @name, @description, 'OpenAI-compatible', @analysisGoal, @analysisFocusLabel, @userId, @createdAt, @updatedAt
     )
   `);
   const insertCategory = db.prepare(`
@@ -273,6 +276,7 @@ export async function createTaskAction(formData: FormData) {
       description: parsed.data.description || null,
       analysisGoal: parsed.data.analysisGoal,
       analysisFocusLabel: "信号",
+      userId,
       createdAt: now,
       updatedAt: now,
     });
@@ -291,6 +295,8 @@ export async function createTaskAction(formData: FormData) {
 }
 
 export async function createCategoryAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = createCategorySchema.safeParse({
     taskId: formData.get("taskId"),
     name: formData.get("name"),
@@ -300,6 +306,8 @@ export async function createCategoryAction(formData: FormData) {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "类别创建失败");
   }
+
+  assertTaskOwnership(parsed.data.taskId, userId);
 
   db.prepare(`
     INSERT INTO categories (
@@ -320,6 +328,8 @@ export async function createCategoryAction(formData: FormData) {
 }
 
 export async function updateCategoryAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = updateCategorySchema.safeParse({
     taskId: formData.get("taskId"),
     categoryId: formData.get("categoryId"),
@@ -331,6 +341,8 @@ export async function updateCategoryAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "类别更新失败");
   }
 
+  assertTaskOwnership(parsed.data.taskId, userId);
+
   const category = db
     .prepare(`SELECT is_other AS isOther FROM categories WHERE id = ?`)
     .get(parsed.data.categoryId) as { isOther: number } | undefined;
@@ -340,7 +352,7 @@ export async function updateCategoryAction(formData: FormData) {
   }
 
   if (category.isOther) {
-    throw new Error("系统保留类别“其他”不能编辑");
+    throw new Error('系统保留类别"其他"不能编辑');
   }
 
   db.prepare(`
@@ -358,6 +370,8 @@ export async function updateCategoryAction(formData: FormData) {
 }
 
 export async function deleteCategoryAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = deleteCategorySchema.safeParse({
     taskId: formData.get("taskId"),
     categoryId: formData.get("categoryId"),
@@ -366,6 +380,8 @@ export async function deleteCategoryAction(formData: FormData) {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "类别删除失败");
   }
+
+  assertTaskOwnership(parsed.data.taskId, userId);
 
   const result = removeCategoryWithFallbackToOther(parsed.data.taskId, parsed.data.categoryId);
 
@@ -381,6 +397,8 @@ export async function createCategoryInlineAction(input: {
   name: string;
   definition: string;
 }): Promise<InlineCategoryResult> {
+  const { userId } = await getCurrentUser();
+
   const parsed = createCategorySchema.safeParse(input);
 
   if (!parsed.success) {
@@ -391,6 +409,8 @@ export async function createCategoryInlineAction(input: {
   }
 
   try {
+    assertTaskOwnership(parsed.data.taskId, userId);
+
     db.prepare(`
       INSERT INTO categories (
         id, task_id, name, definition, status, created_from_round, is_other, updated_by, created_at, updated_at
@@ -422,6 +442,8 @@ export async function updateCategoryInlineAction(input: {
   name: string;
   definition: string;
 }): Promise<InlineCategoryResult> {
+  const { userId } = await getCurrentUser();
+
   const parsed = updateCategorySchema.safeParse(input);
 
   if (!parsed.success) {
@@ -430,6 +452,8 @@ export async function updateCategoryInlineAction(input: {
       error: parsed.error.issues[0]?.message ?? "类别更新失败",
     };
   }
+
+  assertTaskOwnership(parsed.data.taskId, userId);
 
   const category = db
     .prepare(`SELECT is_other AS isOther, name FROM categories WHERE id = ?`)
@@ -480,6 +504,8 @@ export async function deleteCategoryInlineAction(input: {
   taskId: string;
   categoryId: string;
 }): Promise<InlineCategoryResult> {
+  const { userId } = await getCurrentUser();
+
   const parsed = deleteCategorySchema.safeParse(input);
 
   if (!parsed.success) {
@@ -488,6 +514,8 @@ export async function deleteCategoryInlineAction(input: {
       error: parsed.error.issues[0]?.message ?? "类别删除失败",
     };
   }
+
+  assertTaskOwnership(parsed.data.taskId, userId);
 
   const result = removeCategoryWithFallbackToOther(parsed.data.taskId, parsed.data.categoryId);
 
@@ -503,12 +531,17 @@ export async function deleteCategoryInlineAction(input: {
 }
 
 export async function uploadBatchAction(formData: FormData) {
-  const { taskId } = await importBatchesFromFormData(formData);
-  revalidatePath(`/tasks/${taskId}`);
+  const { userId } = await getCurrentUser();
+  const taskId = formData.get("taskId") as string;
+  if (taskId) assertTaskOwnership(taskId, userId);
+
+  const result = await importBatchesFromFormData(formData);
+  revalidatePath(`/tasks/${result.taskId}`);
 }
 
 export async function updateAppSettingsAction(formData: FormData) {
-  const current = getAppSettings();
+  const { userId } = await getCurrentUser();
+  const current = getAppSettings(userId);
   const parsed = appSettingsSchema.safeParse({
     llmApiKey: formData.get("llmApiKey") ?? "",
     llmBaseUrl: formData.get("llmBaseUrl") ?? current.llmBaseUrl,
@@ -521,12 +554,13 @@ export async function updateAppSettingsAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "应用配置保存失败");
   }
 
-  saveAppSettings(parsed.data);
+  saveAppSettings(userId, parsed.data);
   redirect("/?settingsSaved=1");
 }
 
 export async function updatePromptSettingsAction(formData: FormData) {
-  const current = getPromptSettings();
+  const { userId } = await getCurrentUser();
+  const current = getPromptSettings(userId);
   const parsed = promptSettingsSchema.safeParse({
     extractionSystemPrompt: formData.get("extractionSystemPrompt") ?? current.extractionSystemPrompt,
     clusteringSystemPrompt: formData.get("clusteringSystemPrompt") ?? current.clusteringSystemPrompt,
@@ -540,11 +574,13 @@ export async function updatePromptSettingsAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "Prompt 配置保存失败");
   }
 
-  savePromptSettings(parsed.data);
+  savePromptSettings(userId, parsed.data);
   redirect("/?promptSaved=1");
 }
 
 export async function deleteTaskAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = deleteTaskSchema.safeParse({
     taskId: formData.get("taskId"),
   });
@@ -553,7 +589,7 @@ export async function deleteTaskAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "删除任务失败");
   }
 
-  const task = db.prepare(`SELECT id FROM tasks WHERE id = ?`).get(parsed.data.taskId) as { id: string } | undefined;
+  const task = db.prepare(`SELECT id FROM tasks WHERE id = ? AND user_id = ?`).get(parsed.data.taskId, userId) as { id: string } | undefined;
   if (!task) {
     throw new Error("任务不存在");
   }
@@ -563,6 +599,8 @@ export async function deleteTaskAction(formData: FormData) {
 }
 
 export async function updateBatchWorkflowModeAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = updateBatchWorkflowModeSchema.safeParse({
     taskId: formData.get("taskId"),
     batchId: formData.get("batchId"),
@@ -572,6 +610,8 @@ export async function updateBatchWorkflowModeAction(formData: FormData) {
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "更新批次用途失败");
   }
+
+  assertTaskOwnership(parsed.data.taskId, userId);
 
   const batch = db
     .prepare(`SELECT id FROM batches WHERE id = ? AND task_id = ?`)
@@ -591,6 +631,8 @@ export async function updateBatchWorkflowModeAction(formData: FormData) {
 }
 
 export async function generateCategoryMergeSuggestionsAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = categoryMergeSchema.safeParse({
     taskId: formData.get("taskId"),
     maxTargetCount: formData.get("maxTargetCount"),
@@ -602,8 +644,12 @@ export async function generateCategoryMergeSuggestionsAction(formData: FormData)
     );
   }
 
+  assertTaskOwnership(parsed.data.taskId, userId);
+  const settings = getAppSettings(userId);
+  const promptSettingsData = getPromptSettings(userId);
+
   try {
-    await generateCategoryMergeSuggestions(parsed.data.taskId, parsed.data.maxTargetCount);
+    await generateCategoryMergeSuggestions(parsed.data.taskId, parsed.data.maxTargetCount, settings, promptSettingsData);
   } catch (error) {
     const message = error instanceof Error ? error.message : "生成类别合并建议失败";
     redirect(`/tasks/${parsed.data.taskId}?tab=convergence&mergeError=${encodeURIComponent(message)}`);
@@ -613,6 +659,8 @@ export async function generateCategoryMergeSuggestionsAction(formData: FormData)
 }
 
 export async function applyCategoryMergeSuggestionsAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = categoryMergeApplySchema.safeParse({
     taskId: formData.get("taskId"),
     mergeRunId: formData.get("mergeRunId"),
@@ -622,11 +670,15 @@ export async function applyCategoryMergeSuggestionsAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "应用类别合并建议失败");
   }
 
+  assertTaskOwnership(parsed.data.taskId, userId);
+
   await applyCategoryMergeSuggestions(parsed.data.taskId, parsed.data.mergeRunId);
   revalidatePath(`/tasks/${parsed.data.taskId}`);
 }
 
 export async function discardCategoryMergeSuggestionsAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = categoryMergeApplySchema.safeParse({
     taskId: formData.get("taskId"),
     mergeRunId: formData.get("mergeRunId"),
@@ -636,11 +688,15 @@ export async function discardCategoryMergeSuggestionsAction(formData: FormData) 
     throw new Error(parsed.error.issues[0]?.message ?? "丢弃类别合并建议失败");
   }
 
+  assertTaskOwnership(parsed.data.taskId, userId);
+
   await discardCategoryMergeSuggestions(parsed.data.taskId, parsed.data.mergeRunId);
   revalidatePath(`/tasks/${parsed.data.taskId}`);
 }
 
 export async function extractReasonsAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = extractReasonsSchema.safeParse({
     taskId: formData.get("taskId"),
     batchId: formData.get("batchId"),
@@ -650,11 +706,17 @@ export async function extractReasonsAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "信号提取启动失败");
   }
 
-  await runReasonExtraction(parsed.data.taskId, parsed.data.batchId);
+  assertTaskOwnership(parsed.data.taskId, userId);
+  const settings = getAppSettings(userId);
+  const promptSettingsData = getPromptSettings(userId);
+
+  await runReasonExtraction(parsed.data.taskId, parsed.data.batchId, settings, promptSettingsData);
   revalidatePath(`/tasks/${parsed.data.taskId}`);
 }
 
 export async function generateClusterSuggestionsAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = clusterReasonsSchema.safeParse({
     taskId: formData.get("taskId"),
     batchId: formData.get("batchId"),
@@ -664,11 +726,17 @@ export async function generateClusterSuggestionsAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "聚类建议生成失败");
   }
 
-  await generateClusterSuggestions(parsed.data.taskId, parsed.data.batchId);
+  assertTaskOwnership(parsed.data.taskId, userId);
+  const settings = getAppSettings(userId);
+  const promptSettingsData = getPromptSettings(userId);
+
+  await generateClusterSuggestions(parsed.data.taskId, parsed.data.batchId, "cluster_reasons", undefined, settings, promptSettingsData);
   revalidatePath(`/tasks/${parsed.data.taskId}`);
 }
 
 export async function confirmClusterSuggestionsAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = clusterReasonsSchema.safeParse({
     taskId: formData.get("taskId"),
     batchId: formData.get("batchId"),
@@ -678,11 +746,15 @@ export async function confirmClusterSuggestionsAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "确认类别建议失败");
   }
 
+  assertTaskOwnership(parsed.data.taskId, userId);
+
   await confirmClusterSuggestions(parsed.data.taskId, parsed.data.batchId);
   revalidatePath(`/tasks/${parsed.data.taskId}`);
 }
 
 export async function discardClusterSuggestionsAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = clusterReasonsSchema.safeParse({
     taskId: formData.get("taskId"),
     batchId: formData.get("batchId"),
@@ -692,11 +764,15 @@ export async function discardClusterSuggestionsAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "废弃类别建议失败");
   }
 
+  assertTaskOwnership(parsed.data.taskId, userId);
+
   await discardClusterSuggestions(parsed.data.taskId, parsed.data.batchId);
   revalidatePath(`/tasks/${parsed.data.taskId}`);
 }
 
 export async function classifyBatchAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = classifyBatchSchema.safeParse({
     taskId: formData.get("taskId"),
     batchId: formData.get("batchId"),
@@ -706,11 +782,17 @@ export async function classifyBatchAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "批量分类启动失败");
   }
 
-  await runBatchClassification(parsed.data.taskId, parsed.data.batchId);
+  assertTaskOwnership(parsed.data.taskId, userId);
+  const settings = getAppSettings(userId);
+  const promptSettingsData = getPromptSettings(userId);
+
+  await runBatchClassification(parsed.data.taskId, parsed.data.batchId, settings, promptSettingsData);
   revalidatePath(`/tasks/${parsed.data.taskId}`);
 }
 
 export async function iterateOthersAction(formData: FormData) {
+  const { userId } = await getCurrentUser();
+
   const parsed = iterateOthersSchema.safeParse({
     taskId: formData.get("taskId"),
     batchId: formData.get("batchId"),
@@ -720,6 +802,10 @@ export async function iterateOthersAction(formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "处理其他失败");
   }
 
-  await iterateOtherDialogs(parsed.data.taskId, parsed.data.batchId);
+  assertTaskOwnership(parsed.data.taskId, userId);
+  const settings = getAppSettings(userId);
+  const promptSettingsData = getPromptSettings(userId);
+
+  await iterateOtherDialogs(parsed.data.taskId, parsed.data.batchId, settings, promptSettingsData);
   revalidatePath(`/tasks/${parsed.data.taskId}`);
 }

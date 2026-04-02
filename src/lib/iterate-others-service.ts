@@ -2,6 +2,8 @@ import { confirmClusterSuggestions, generateClusterSuggestions } from "@/lib/clu
 import { runBatchClassificationForDialogs } from "@/lib/classification-service";
 import { db } from "@/lib/db";
 import { runReasonExtractionForDialogs } from "@/lib/extraction-service";
+import type { AppSettings } from "@/lib/app-config";
+import type { PromptSettings } from "@/lib/prompt-config";
 
 type OtherDialogRow = {
   id: string;
@@ -73,7 +75,7 @@ function getSuccessfullyExtractedDialogsByStepRun(taskId: string, sourceStepRunI
     .all(taskId, taskId, sourceStepRunId) as ExtractedDialogRow[];
 }
 
-export async function iterateOtherDialogs(taskId: string, batchId: string) {
+export async function iterateOtherDialogs(taskId: string, batchId: string, settings: AppSettings, promptSettings: PromptSettings) {
   const otherCategory = db
     .prepare(`
       SELECT id, name
@@ -116,6 +118,8 @@ export async function iterateOtherDialogs(taskId: string, batchId: string) {
     batchId,
     otherDialogs,
     "iterate_others_extract",
+    settings,
+    promptSettings,
   );
   const extractedDialogs = getSuccessfullyExtractedDialogs(
     taskId,
@@ -132,6 +136,8 @@ export async function iterateOtherDialogs(taskId: string, batchId: string) {
     batchId,
     "iterate_others_cluster",
     extraction.stepRunId,
+    settings,
+    promptSettings,
   );
   const confirmed = await confirmClusterSuggestions(taskId, batchId);
 
@@ -140,6 +146,8 @@ export async function iterateOtherDialogs(taskId: string, batchId: string) {
     batchId,
     extractedDialogs,
     "iterate_others_classify",
+    settings,
+    promptSettings,
   );
 
   return {
@@ -152,7 +160,7 @@ export async function iterateOtherDialogs(taskId: string, batchId: string) {
   };
 }
 
-export async function iterateAllOtherDialogs(taskId: string) {
+export async function iterateAllOtherDialogs(taskId: string, settings: AppSettings, promptSettings: PromptSettings) {
   const otherCategory = db
     .prepare(`
       SELECT id, name
@@ -194,6 +202,8 @@ export async function iterateAllOtherDialogs(taskId: string) {
     null,
     otherDialogs,
     "iterate_others_extract",
+    settings,
+    promptSettings,
   );
   const extractedDialogs = getSuccessfullyExtractedDialogs(
     taskId,
@@ -210,6 +220,8 @@ export async function iterateAllOtherDialogs(taskId: string) {
     null,
     "iterate_others_cluster",
     extraction.stepRunId,
+    settings,
+    promptSettings,
   );
   const confirmed = await confirmClusterSuggestions(taskId, null);
 
@@ -218,6 +230,8 @@ export async function iterateAllOtherDialogs(taskId: string) {
     null,
     extractedDialogs,
     "iterate_others_classify",
+    settings,
+    promptSettings,
   );
 
   return {
@@ -231,7 +245,7 @@ export async function iterateAllOtherDialogs(taskId: string) {
   };
 }
 
-export async function resumeInterruptedIterateAllDialogs(taskId: string) {
+export async function resumeInterruptedIterateAllDialogs(taskId: string, settings: AppSettings, promptSettings: PromptSettings) {
   const taskLevelIterateRuns = db
     .prepare(`
       SELECT
@@ -281,6 +295,8 @@ export async function resumeInterruptedIterateAllDialogs(taskId: string) {
       null,
       "iterate_others_cluster",
       latestExtractRun.id,
+      settings,
+      promptSettings,
     );
     const confirmed = await confirmClusterSuggestions(taskId, null);
     const classification = await runBatchClassificationForDialogs(
@@ -288,6 +304,8 @@ export async function resumeInterruptedIterateAllDialogs(taskId: string) {
       null,
       extractedDialogs,
       "iterate_others_classify",
+      settings,
+      promptSettings,
     );
 
     return {
@@ -308,6 +326,8 @@ export async function resumeInterruptedIterateAllDialogs(taskId: string) {
     null,
     extractedDialogs,
     "iterate_others_classify",
+    settings,
+    promptSettings,
   );
 
   return {

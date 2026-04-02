@@ -1,11 +1,12 @@
-import { getPromptSettings, renderPromptTemplate } from "@/lib/prompt-config";
+import { renderPromptTemplate, type PromptSettings } from "@/lib/prompt-config";
 
 export function buildClusteringSystemPrompt(
   reasons: string[],
   analysisGoal: string,
   analysisFocusLabel: string,
+  promptSettings: PromptSettings,
 ) {
-  return renderPromptTemplate(getPromptSettings().clusteringSystemPrompt, {
+  return renderPromptTemplate(promptSettings.clusteringSystemPrompt, {
     reasons_list: reasons.map((reason, index) => `${index + 1}. ${reason}`).join("\n"),
     analysis_goal: analysisGoal,
     analysis_focus_label: analysisFocusLabel,

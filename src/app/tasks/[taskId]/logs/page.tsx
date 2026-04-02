@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { db } from "@/lib/db";
 import { reconcileStalledStepRuns } from "@/lib/step-run-utils";
+import { getCurrentUser } from "@/lib/current-user";
 
 type LogsPageProps = {
   params: Promise<{
@@ -40,6 +41,7 @@ function prettyJson(value: string | null) {
 }
 
 export default async function TaskLogsPage({ params, searchParams }: LogsPageProps) {
+  const { userId } = await getCurrentUser();
   reconcileStalledStepRuns();
 
   const { taskId } = await params;
@@ -51,9 +53,9 @@ export default async function TaskLogsPage({ params, searchParams }: LogsPagePro
     .prepare(`
       SELECT id, name, description
       FROM tasks
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `)
-    .get(taskId) as { id: string; name: string; description: string | null } | undefined;
+    .get(taskId, userId) as { id: string; name: string; description: string | null } | undefined;
 
   if (!task) {
     notFound();

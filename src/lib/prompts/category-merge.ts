@@ -1,4 +1,4 @@
-import { getPromptSettings, renderPromptTemplate } from "@/lib/prompt-config";
+import { renderPromptTemplate, type PromptSettings } from "@/lib/prompt-config";
 
 type MergeCategoryInput = {
   name: string;
@@ -6,7 +6,7 @@ type MergeCategoryInput = {
   hitCount: number;
 };
 
-export function buildCategoryMergeSystemPrompt(categories: MergeCategoryInput[], maxTargetCount: number) {
+export function buildCategoryMergeSystemPrompt(categories: MergeCategoryInput[], maxTargetCount: number, promptSettings: PromptSettings) {
   const categoryList = categories
     .map(
       (category, index) =>
@@ -14,7 +14,7 @@ export function buildCategoryMergeSystemPrompt(categories: MergeCategoryInput[],
     )
     .join("\n\n");
 
-  return renderPromptTemplate(getPromptSettings().categoryMergeSystemPrompt, {
+  return renderPromptTemplate(promptSettings.categoryMergeSystemPrompt, {
     max_target_count: String(maxTargetCount),
     merge_category_list: categoryList,
   });

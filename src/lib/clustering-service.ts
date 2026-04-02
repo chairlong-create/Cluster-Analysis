@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 
-import { getAppSettings } from "@/lib/app-config";
+import type { AppSettings } from "@/lib/app-config";
 import { db } from "@/lib/db";
 import { clusterReasonsWithMiniMax } from "@/lib/llm/clustering";
 import { failRunningStepRuns, failStepRun } from "@/lib/step-run-utils";
+import type { PromptSettings } from "@/lib/prompt-config";
 
 type ReasonRow = {
   dialogId: string;
@@ -36,6 +37,8 @@ export async function generateClusterSuggestions(
   batchId: string | null,
   stepType = "cluster_reasons",
   sourceStepRunId?: string,
+  settings?: AppSettings,
+  promptSettings?: PromptSettings,
 ) {
   const reasons = (
     batchId
@@ -139,9 +142,11 @@ export async function generateClusterSuggestions(
       reasons.map((item) => item.buyBlockReason),
       taskConfig.analysisGoal,
       taskConfig.analysisFocusLabel,
+      settings!,
+      promptSettings!,
     );
     const finishedAt = new Date().toISOString();
-    const { llmApiKey } = getAppSettings();
+    const llmApiKey = settings!.llmApiKey;
 
     const insertSuggestion = db.prepare(`
     INSERT INTO category_suggestions (
