@@ -9,7 +9,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --registry=https://registry.npmmirror.com
 
 COPY . .
-RUN npm run build
+RUN mkdir -p /data && DATABASE_FILE=/data/cluster-analysis.db npm run build
 
 FROM node:20-alpine AS runner
 
