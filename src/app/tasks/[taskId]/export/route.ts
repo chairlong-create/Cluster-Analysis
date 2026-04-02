@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { toCsv } from "@/lib/export-utils";
 
@@ -10,11 +11,16 @@ type RouteProps = {
 };
 
 export async function GET(_: Request, { params }: RouteProps) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const userId = session.user.id;
   const { taskId } = await params;
 
   const task = db
-    .prepare(`SELECT name FROM tasks WHERE id = ?`)
-    .get(taskId) as { name: string } | undefined;
+    .prepare(`SELECT name FROM tasks WHERE id = ? AND user_id = ?`)
+    .get(taskId, userId) as { name: string } | undefined;
 
   if (!task) {
     return NextResponse.json({ error: "任务不存在" }, { status: 404 });

@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 
+import type { AppSettings } from "@/lib/app-config";
 import { db } from "@/lib/db";
 import { mergeCategoriesWithMiniMax } from "@/lib/llm/category-merge";
 import { failRunningStepRuns, failStepRun } from "@/lib/step-run-utils";
+import type { PromptSettings } from "@/lib/prompt-config";
 
 type ActiveCategory = {
   id: string;
@@ -64,7 +66,7 @@ function normalizeMergedCoverage(
   };
 }
 
-export async function generateCategoryMergeSuggestions(taskId: string, maxTargetCount: number) {
+export async function generateCategoryMergeSuggestions(taskId: string, maxTargetCount: number, settings: AppSettings, promptSettings: PromptSettings) {
   const sourceCategories = db
     .prepare(`
       SELECT
@@ -133,6 +135,8 @@ export async function generateCategoryMergeSuggestions(taskId: string, maxTarget
         hitCount: category.hitCount,
       })),
       maxTargetCount,
+      settings,
+      promptSettings,
     );
 
     const insertLog = db.prepare(`

@@ -356,7 +356,7 @@ npm run lint
 npm test
 ```
 
-4. 检查 `README.md`、[docs/使用手册.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)、[docs/handoff-2026-03-28.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/handoff-2026-03-28.md)
+4. 检查 `README.md`、[docs/使用手册.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)、[docs/handoff.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/handoff.md)
 5. 决定是否公开 `csv_splits/`、`docs/` 下的业务资料和复盘文件
 
 更细的发布检查见 [docs/github-release-checklist.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/github-release-checklist.md)。
@@ -369,7 +369,7 @@ npm test
 2. 如果是零基础同事，先看 [docs/同事本地部署说明.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E5%90%8C%E4%BA%8B%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2%E8%AF%B4%E6%98%8E.md)
 3. 再看 [docs/使用手册.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C.md)
 4. 需要理解需求背景时，再看 [docs/PRD.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/PRD.md)
-5. 需要理解历史决策和问题排查时，再看 [docs/handoff-2026-03-28.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/handoff-2026-03-28.md)
+5. 需要理解历史决策和问题排查时，再看 [docs/handoff.md](/Users/chenlong/vibe%20coding/Cluster%20Analysis/docs/handoff.md)
 
 ## 已知限制
 

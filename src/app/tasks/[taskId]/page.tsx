@@ -22,6 +22,7 @@ import type {
 } from "@/components/task-workspace-types";
 import { db } from "@/lib/db";
 import { reconcileStalledStepRuns } from "@/lib/step-run-utils";
+import { getCurrentUser } from "@/lib/current-user";
 
 type TaskPageProps = {
   params: Promise<{
@@ -113,6 +114,7 @@ function isActiveRun(status: string | null | undefined) {
 }
 
 export default async function TaskPage({ params, searchParams }: TaskPageProps) {
+  const { userId } = await getCurrentUser();
   reconcileStalledStepRuns();
 
   const { taskId } = await params;
@@ -142,9 +144,9 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
           WHERE task_id = tasks.id
         ) AS batchCount
       FROM tasks
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `)
-    .get(taskId) as TaskSummary | undefined;
+    .get(taskId, userId) as TaskSummary | undefined;
 
   if (!task) {
     notFound();

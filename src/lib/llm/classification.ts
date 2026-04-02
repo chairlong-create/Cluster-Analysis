@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { getAppSettings } from "@/lib/app-config";
+import type { AppSettings } from "@/lib/app-config";
 import {
   buildClassificationSystemPrompt,
   getClassificationUserPrompt,
 } from "@/lib/prompts/classification";
+import type { PromptSettings } from "@/lib/prompt-config";
 
 type CategoryInput = {
   id: string;
@@ -115,7 +116,7 @@ function mockClassify(input: {
   return {
     result,
     log: {
-      promptText: buildClassificationSystemPrompt(input),
+      promptText: "[mock] classification prompt",
       responseText: JSON.stringify(result),
       status: "succeeded",
       latencyMs: 0,
@@ -131,12 +132,11 @@ export async function classifyDialogWithMiniMax(input: {
   categories: CategoryInput[];
   analysisGoal: string;
   analysisFocusLabel: string;
-}): Promise<ClassificationResponse> {
-  const settings = getAppSettings();
+}, settings: AppSettings, promptSettings: PromptSettings): Promise<ClassificationResponse> {
   const apiKey = settings.llmApiKey;
   const baseUrl = settings.llmBaseUrl;
   const model = settings.llmModel;
-  const systemPrompt = buildClassificationSystemPrompt(input);
+  const systemPrompt = buildClassificationSystemPrompt(input, promptSettings);
   const userPrompt = getClassificationUserPrompt();
 
   if (!apiKey) {

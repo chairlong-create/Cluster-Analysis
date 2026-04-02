@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { getAppSettings } from "@/lib/app-config";
+import type { AppSettings } from "@/lib/app-config";
 import { db } from "@/lib/db";
 import { withHeartbeat } from "@/lib/heartbeat";
 import { recordFailedExtractionAttempt } from "@/lib/extraction-log-writer";
@@ -8,6 +8,7 @@ import { ExtractionParseError } from "@/lib/llm/extraction-parser";
 import { extractReasonWithMiniMax } from "@/lib/llm/minimax";
 import type { ExtractionRequest } from "@/lib/llm/types";
 import { failRunningStepRuns, failStepRun } from "@/lib/step-run-utils";
+import type { PromptSettings } from "@/lib/prompt-config";
 
 type BatchDialogRow = {
   id: string;
@@ -38,7 +39,7 @@ function mapBatchStatus(successCount: number, failedCount: number) {
   return "extract_failed";
 }
 
-export async function runReasonExtraction(taskId: string, batchId: string) {
+export async function runReasonExtraction(taskId: string, batchId: string, settings: AppSettings, promptSettings: PromptSettings) {
   const dialogs = db
     .prepare(`
       SELECT id, batch_id AS batchId, source_dialog_id AS sourceDialogId, source_text AS sourceText
@@ -48,10 +49,10 @@ export async function runReasonExtraction(taskId: string, batchId: string) {
     `)
     .all(taskId, batchId) as BatchDialogRow[];
 
-  return runReasonExtractionForDialogs(taskId, batchId, dialogs);
+  return runReasonExtractionForDialogs(taskId, batchId, dialogs, "extract_reasons", settings, promptSettings);
 }
 
-export async function retryFailedReasonExtraction(taskId: string, batchId: string) {
+export async function retryFailedReasonExtraction(taskId: string, batchId: string, settings: AppSettings, promptSettings: PromptSettings) {
   const latestRun = db
     .prepare(`
       SELECT id, step_type AS stepType
@@ -96,7 +97,7 @@ export async function retryFailedReasonExtraction(taskId: string, batchId: strin
     throw new Error("当前批次没有可重试的失败条目");
   }
 
-  return runReasonExtractionForDialogs(taskId, batchId, dialogs, "extract_reasons_retry");
+  return runReasonExtractionForDialogs(taskId, batchId, dialogs, "extract_reasons_retry", settings, promptSettings);
 }
 
 export async function runReasonExtractionForDialogs(
@@ -104,6 +105,8 @@ export async function runReasonExtractionForDialogs(
   batchId: string | null,
   dialogs: BatchDialogRow[],
   stepType = "extract_reasons",
+  settings: AppSettings,
+  promptSettings: PromptSettings,
 ) {
   if (!dialogs.length) {
     throw new Error(batchId ? "当前批次没有可提取的对话" : "当前任务没有可提取的对话");
@@ -213,7 +216,7 @@ export async function runReasonExtractionForDialogs(
     evidenceQuote: string;
     }> = [];
 
-    const { extractionConcurrency, llmApiKey, llmModel } = getAppSettings();
+    const { extractionConcurrency, llmApiKey, llmModel } = settings;
     const concurrency = Number(extractionConcurrency || 5);
     let cursor = 0;
     let lastProgressFlushAt = 0;
@@ -257,7 +260,7 @@ export async function runReasonExtractionForDialogs(
         };
 
         try {
-          const providerResponse = await extractReasonWithMiniMax(request);
+          const providerResponse = await extractReasonWithMiniMax(request, settings, promptSettings);
           const createdAt = new Date().toISOString();
           const parsedStatus = providerResponse.log.status === "succeeded" ? "parsed" : "failed";
           const resultStatus = providerResponse.result.hasTargetSignal ? "reasons_extracted" : "no_buy_block_reason";

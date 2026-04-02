@@ -1,7 +1,8 @@
 import { z } from "zod";
 
-import { getAppSettings } from "@/lib/app-config";
+import type { AppSettings } from "@/lib/app-config";
 import { buildCategoryMergeSystemPrompt, getCategoryMergeUserPrompt } from "@/lib/prompts/category-merge";
+import type { PromptSettings } from "@/lib/prompt-config";
 
 type MergeCategoryInput = {
   name: string;
@@ -52,7 +53,7 @@ function extractJsonBlock(content: string) {
 }
 
 function createMockMerge(categories: MergeCategoryInput[], maxTargetCount: number): CategoryMergeResponse {
-  const promptText = buildCategoryMergeSystemPrompt(categories, maxTargetCount);
+  const promptText = "[mock] category merge prompt";
 
   const mergedCategories =
     categories.length <= maxTargetCount
@@ -85,12 +86,13 @@ function createMockMerge(categories: MergeCategoryInput[], maxTargetCount: numbe
 export async function mergeCategoriesWithMiniMax(
   categories: MergeCategoryInput[],
   maxTargetCount: number,
+  settings: AppSettings,
+  promptSettings: PromptSettings,
 ): Promise<CategoryMergeResponse> {
-  const settings = getAppSettings();
   const apiKey = settings.llmApiKey;
   const baseUrl = settings.llmBaseUrl;
   const model = settings.llmModel;
-  const systemPrompt = buildCategoryMergeSystemPrompt(categories, maxTargetCount);
+  const systemPrompt = buildCategoryMergeSystemPrompt(categories, maxTargetCount, promptSettings);
   const userPrompt = getCategoryMergeUserPrompt();
 
   if (!apiKey) {

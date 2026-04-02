@@ -1,0 +1,12 @@
+node_modules
+.next
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.local
+.env.production
+.git
+csv_splits
+tests
+docs

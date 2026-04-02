@@ -13,7 +13,7 @@
 
 - `README.md` 已覆盖安装、启动、配置、测试、常见限制
 - `docs/使用手册.md` 已覆盖实际操作流程
-- `docs/handoff-2026-03-28.md` 已反映当前稳定性结论和已修复问题
+- `docs/handoff.md` 已反映当前稳定性结论和已修复问题
 - 如果仓库会公开，确认 `docs/` 下的业务材料是否适合公开
 
 ## 3. 本地验证
@@ -68,7 +68,7 @@ git status
 - `.env.example`
 - `README.md`
 - `docs/使用手册.md`
-- `docs/handoff-2026-03-28.md`
+- `docs/handoff.md`
 - 基础测试
 
 ## 6. 建议同事的本地使用方式

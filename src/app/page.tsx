@@ -10,6 +10,7 @@ import { DeleteTaskForm } from "@/components/delete-task-form";
 import { getAppSettings } from "@/lib/app-config";
 import { db } from "@/lib/db";
 import { getPromptSettings, promptReferences } from "@/lib/prompt-config";
+import { getCurrentUser } from "@/lib/current-user";
 
 type HomeProps = {
   searchParams?: Promise<{
@@ -19,11 +20,12 @@ type HomeProps = {
 };
 
 export default async function Home({ searchParams }: HomeProps) {
+  const { userId } = await getCurrentUser();
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const settingsSaved = resolvedSearchParams?.settingsSaved === "1";
   const promptSaved = resolvedSearchParams?.promptSaved === "1";
-  const settings = getAppSettings();
-  const promptSettings = getPromptSettings();
+  const settings = getAppSettings(userId);
+  const promptSettings = getPromptSettings(userId);
   const tasks = db
     .prepare(`
       SELECT
@@ -47,9 +49,10 @@ export default async function Home({ searchParams }: HomeProps) {
           WHERE c.task_id = t.id
         ) AS categoryCount
       FROM tasks t
+      WHERE t.user_id = ?
       ORDER BY t.updated_at DESC
     `)
-    .all() as Array<{
+    .all(userId) as Array<{
     id: string;
     name: string;
     description: string | null;

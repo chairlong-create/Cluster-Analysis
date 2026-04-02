@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { getAppSettings } from "@/lib/app-config";
+import type { AppSettings } from "@/lib/app-config";
 import { db } from "@/lib/db";
 import { withHeartbeat } from "@/lib/heartbeat";
 import { classifyDialogWithMiniMax } from "@/lib/llm/classification";
 import { failRunningStepRuns, failStepRun } from "@/lib/step-run-utils";
+import type { PromptSettings } from "@/lib/prompt-config";
 
 type CategoryRow = {
   id: string;
@@ -42,7 +43,7 @@ function mapBatchStatus(successCount: number, failedCount: number, otherCount: n
   return "categorized";
 }
 
-export async function runBatchClassification(taskId: string, batchId: string) {
+export async function runBatchClassification(taskId: string, batchId: string, settings: AppSettings, promptSettings: PromptSettings) {
   const dialogs = db
     .prepare(`
       SELECT
@@ -58,7 +59,7 @@ export async function runBatchClassification(taskId: string, batchId: string) {
     `)
     .all(taskId, batchId) as DialogRow[];
 
-  return runBatchClassificationForDialogs(taskId, batchId, dialogs);
+  return runBatchClassificationForDialogs(taskId, batchId, dialogs, "classify", settings, promptSettings);
 }
 
 type ClassificationRunLookup = {
@@ -66,7 +67,7 @@ type ClassificationRunLookup = {
   stepType: string;
 };
 
-export async function retryFailedBatchClassification(taskId: string, batchId: string) {
+export async function retryFailedBatchClassification(taskId: string, batchId: string, settings: AppSettings, promptSettings: PromptSettings) {
   const latestRun = db
     .prepare(`
       SELECT id, step_type AS stepType
@@ -113,7 +114,7 @@ export async function retryFailedBatchClassification(taskId: string, batchId: st
     throw new Error("当前批次没有可重试的失败分类条目");
   }
 
-  return runBatchClassificationForDialogs(taskId, batchId, dialogs, "classify_retry");
+  return runBatchClassificationForDialogs(taskId, batchId, dialogs, "classify_retry", settings, promptSettings);
 }
 
 export async function runBatchClassificationForDialogs(
@@ -121,6 +122,8 @@ export async function runBatchClassificationForDialogs(
   batchId: string | null,
   dialogs: DialogRow[],
   stepType = "classify",
+  settings: AppSettings,
+  promptSettings: PromptSettings,
 ) {
   const categories = db
     .prepare(`
@@ -244,7 +247,7 @@ export async function runBatchClassificationForDialogs(
     categoryName: string;
     evidenceQuote: string;
     }> = [];
-    const { classifyConcurrency, llmApiKey, llmModel } = getAppSettings();
+    const { classifyConcurrency, llmApiKey, llmModel } = settings;
     const concurrency = Number(classifyConcurrency || 5);
     let cursor = 0;
     let lastProgressFlushAt = 0;
@@ -286,7 +289,7 @@ export async function runBatchClassificationForDialogs(
             categories,
             analysisGoal,
             analysisFocusLabel,
-          });
+          }, settings, promptSettings);
           const createdAt = new Date().toISOString();
           const parsedStatus = providerResponse.log.status === "succeeded" ? "parsed" : "failed";
           const resultStatus = providerResponse.result.isOther ? "classified_other" : "classified";

@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { getAppSettings } from "@/lib/app-config";
+import type { AppSettings } from "@/lib/app-config";
 import { buildClusteringSystemPrompt, getClusteringUserPrompt } from "@/lib/prompts/clustering";
+import type { PromptSettings } from "@/lib/prompt-config";
 
 type ClusterCandidate = {
   name: string;
@@ -124,7 +125,7 @@ function mockCluster(reasons: string[], analysisFocusLabel: string): ClusterSugg
   return {
     categories,
     log: {
-      promptText: buildClusteringSystemPrompt(reasons, `分析对话中的${analysisFocusLabel}`, analysisFocusLabel),
+      promptText: "[mock] clustering prompt",
       responseText: JSON.stringify({ categories }),
       status: "succeeded",
       latencyMs: 0,
@@ -138,12 +139,13 @@ export async function clusterReasonsWithMiniMax(
   reasons: string[],
   analysisGoal: string,
   analysisFocusLabel: string,
+  settings: AppSettings,
+  promptSettings: PromptSettings,
 ): Promise<ClusterSuggestionResponse> {
-  const settings = getAppSettings();
   const apiKey = settings.llmApiKey;
   const baseUrl = settings.llmBaseUrl;
   const model = settings.llmModel;
-  const systemPrompt = buildClusteringSystemPrompt(reasons, analysisGoal, analysisFocusLabel);
+  const systemPrompt = buildClusteringSystemPrompt(reasons, analysisGoal, analysisFocusLabel, promptSettings);
   const userPrompt = getClusteringUserPrompt();
 
   if (!apiKey) {

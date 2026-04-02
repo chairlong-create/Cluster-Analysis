@@ -136,48 +136,50 @@ export const defaultPromptSettings: PromptSettings = {
   categoryMergeSystemPrompt: promptReferences.categoryMerge,
 };
 
-function getPromptSettingValue(key: PromptKey) {
+function getPromptSettingValue(userId: string, key: PromptKey) {
   const row = db
-    .prepare(`SELECT value FROM app_settings WHERE key = ?`)
-    .get(key) as { value: string } | undefined;
+    .prepare(`SELECT value FROM app_settings WHERE user_id = ? AND key = ?`)
+    .get(userId, key) as { value: string } | undefined;
 
   return row?.value ?? null;
 }
 
-export function getPromptSettings(): PromptSettings {
+export function getPromptSettings(userId: string): PromptSettings {
   return {
     extractionSystemPrompt:
-      getPromptSettingValue("extraction_system_prompt") ?? defaultPromptSettings.extractionSystemPrompt,
+      getPromptSettingValue(userId, "extraction_system_prompt") ?? defaultPromptSettings.extractionSystemPrompt,
     clusteringSystemPrompt:
-      getPromptSettingValue("clustering_system_prompt") ?? defaultPromptSettings.clusteringSystemPrompt,
+      getPromptSettingValue(userId, "clustering_system_prompt") ?? defaultPromptSettings.clusteringSystemPrompt,
     classificationSystemPrompt:
-      getPromptSettingValue("classification_system_prompt") ??
+      getPromptSettingValue(userId, "classification_system_prompt") ??
       defaultPromptSettings.classificationSystemPrompt,
     categoryMergeSystemPrompt:
-      getPromptSettingValue("category_merge_system_prompt") ??
+      getPromptSettingValue(userId, "category_merge_system_prompt") ??
       defaultPromptSettings.categoryMergeSystemPrompt,
   };
 }
 
-export function savePromptSettings(input: PromptSettings) {
+export function savePromptSettings(userId: string, input: PromptSettings) {
   const now = new Date().toISOString();
   const upsert = db.prepare(`
-    INSERT INTO app_settings (key, value, updated_at)
-    VALUES (@key, @value, @updatedAt)
-    ON CONFLICT(key) DO UPDATE SET
+    INSERT INTO app_settings (user_id, key, value, updated_at)
+    VALUES (@userId, @key, @value, @updatedAt)
+    ON CONFLICT(user_id, key) DO UPDATE SET
       value = excluded.value,
       updated_at = excluded.updated_at
   `);
 
   const transaction = db.transaction(() => {
-    upsert.run({ key: "extraction_system_prompt", value: input.extractionSystemPrompt.trim(), updatedAt: now });
-    upsert.run({ key: "clustering_system_prompt", value: input.clusteringSystemPrompt.trim(), updatedAt: now });
+    upsert.run({ userId, key: "extraction_system_prompt", value: input.extractionSystemPrompt.trim(), updatedAt: now });
+    upsert.run({ userId, key: "clustering_system_prompt", value: input.clusteringSystemPrompt.trim(), updatedAt: now });
     upsert.run({
+      userId,
       key: "classification_system_prompt",
       value: input.classificationSystemPrompt.trim(),
       updatedAt: now,
     });
     upsert.run({
+      userId,
       key: "category_merge_system_prompt",
       value: input.categoryMergeSystemPrompt.trim(),
       updatedAt: now,
