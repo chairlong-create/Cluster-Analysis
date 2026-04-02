@@ -8,6 +8,7 @@ services:
     environment:
       - DATABASE_FILE=/data/cluster-analysis.db
       - AUTH_SECRET=${AUTH_SECRET}
+      - AUTH_URL=${AUTH_URL:-http://localhost:3000}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
     restart: unless-stopped
 
