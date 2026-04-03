@@ -4,14 +4,22 @@ import type { NextRequest } from "next/server";
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public paths
+  // Allow static assets
   if (
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/api/auth") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico")
   ) {
     return NextResponse.next();
+  }
+
+  // Allow auth-related paths, but prevent caching
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/api/auth")
+  ) {
+    const response = NextResponse.next();
+    response.headers.set("Cache-Control", "no-store");
+    return response;
   }
 
   const sessionToken =
