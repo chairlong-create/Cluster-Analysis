@@ -20,7 +20,9 @@ export function middleware(request: NextRequest) {
 
   if (!sessionToken) {
     const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+    const response = NextResponse.redirect(loginUrl);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
   }
 
   return NextResponse.next();
