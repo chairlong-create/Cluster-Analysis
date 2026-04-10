@@ -2,6 +2,34 @@
 
 这份文档面向下一个会话或后续维护者。目标只有一个：快速接上当前真实状态，不重复踩坑。
 
+## 0. 2026-04-10 补充：线上访问常见问题
+
+### 浏览器代理插件导致 ERR_TOO_MANY_REDIRECTS
+
+**现象：** 通过公网 IP（HTTP）访问时，非无痕模式下控制台大量报 `net::ERR_TOO_MANY_REDIRECTS`，静态资源（JS/CSS/favicon）全部加载失败，但无痕模式完全正常。
+
+**根因：** 浏览器安装了代理插件（VPN/Proxy 扩展）。代理插件拦截 HTTP 请求并尝试走代理或强制 HTTPS，与服务端的 HTTP 响应形成重定向循环。无痕模式默认禁用扩展，所以不受影响。
+
+**解决方法：** 关闭浏览器代理插件，或将服务器地址加入代理的白名单/直连列表。
+
+**排查思路（供后续类似问题参考）：**
+
+1. 如果无痕正常、非无痕报错 → 先排除 Cookie/缓存（清除站点数据）
+2. 清除站点数据后仍报错 → 不是服务端问题，是浏览器扩展干扰
+3. `chrome://extensions/` 逐个禁用排查
+
+### Middleware 加固（同次修复）
+
+本次同时对 middleware 做了两项加固：
+
+1. **添加 `config.matcher`：** 通过 Next.js 框架级配置排除 `_next/static`、`_next/image`、`favicon.ico`，确保 middleware 永远不会拦截静态资源
+2. **`getCurrentUser()` 清除无效 Cookie：** auth 验证失败时，先删除过期/无效的 session cookie 再重定向到 `/login`，防止"middleware 放行但服务端拒绝"的循环
+
+相关文件：
+
+- `src/middleware.ts`
+- `src/lib/current-user.ts`
+
 ## 0. 2026-04-02 补充结论：多用户认证与线上部署
 
 本次会话完成了从"本地单用户工具"到"多用户线上部署"的架构升级。分支 `feature/multi-user-auth`，46 个文件，+1264 -118。
