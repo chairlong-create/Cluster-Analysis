@@ -1,10 +1,17 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 
 export async function getCurrentUser() {
   const session = await auth();
   if (!session?.user?.id) {
+    // Clear stale/invalid session cookies before redirecting.
+    // Without this, middleware sees the cookie and passes through,
+    // but auth() rejects it, creating a redirect cycle.
+    const cookieStore = await cookies();
+    cookieStore.delete("authjs.session-token");
+    cookieStore.delete("__Secure-authjs.session-token");
     redirect("/login");
   }
   return {
