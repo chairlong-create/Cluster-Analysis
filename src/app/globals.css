@@ -983,6 +983,12 @@ code {
   padding-left: 2px;
 }
 
+.exportButtonStack {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
 .categoryAddCell {
   padding: 0 !important;
 }
