@@ -42,9 +42,6 @@ export async function POST(_request: Request, { params }: RouteContext) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "一键分类启动失败" },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "一键分类启动失败" }, { status: 500 });
   }
 }
