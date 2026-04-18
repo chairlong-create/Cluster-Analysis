@@ -153,7 +153,12 @@ export async function runOneClickBatchClassification(
     }
 
     const finishedAt = new Date().toISOString();
-    const finalStatus = classificationResult.failedCount === 0 ? "succeeded" : "partial_success";
+    const finalStatus =
+      classificationResult.failedCount === 0
+        ? "succeeded"
+        : classificationResult.successCount > 0
+          ? "partial_success"
+          : "failed";
 
     db.prepare(`
       UPDATE step_runs
