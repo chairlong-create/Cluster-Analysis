@@ -2,6 +2,7 @@ import { confirmClusterSuggestions, generateClusterSuggestions } from "@/lib/clu
 import { runBatchClassificationForDialogs } from "@/lib/classification-service";
 import { db } from "@/lib/db";
 import { runReasonExtractionForDialogs } from "@/lib/extraction-service";
+import { recordFailedIterateResumeCheckpoint } from "@/lib/iterate-resume-checkpoint";
 import type { AppSettings } from "@/lib/app-config";
 import type { PromptSettings } from "@/lib/prompt-config";
 
@@ -28,6 +29,32 @@ type IterateRunLookup = {
   startedAt: string;
   finishedAt: string | null;
 };
+
+const NO_EXTRACTED_SIGNAL_MESSAGE = "重新提取没有产出可聚类的分析信号，请先处理失败项或调整提取 Prompt";
+
+function getStepRunStartedAt(stepRunId: string) {
+  const row = db
+    .prepare(`
+      SELECT started_at AS startedAt
+      FROM step_runs
+      WHERE id = ?
+    `)
+    .get(stepRunId) as { startedAt: string } | undefined;
+
+  return row?.startedAt ?? new Date().toISOString();
+}
+
+function recordNoExtractedSignalsCheckpoint(taskId: string, batchId: string | null, sourceStepRunId: string) {
+  recordFailedIterateResumeCheckpoint({
+    db,
+    taskId,
+    batchId,
+    stepType: "iterate_others_cluster",
+    sourceStartedAt: getStepRunStartedAt(sourceStepRunId),
+    inputCount: 0,
+    errorMessage: NO_EXTRACTED_SIGNAL_MESSAGE,
+  });
+}
 
 function getSuccessfullyExtractedDialogs(taskId: string, sourceStepRunId: string, dialogIds: string[]) {
   if (!dialogIds.length) {
@@ -128,7 +155,8 @@ export async function iterateOtherDialogs(taskId: string, batchId: string, setti
   );
 
   if (!extractedDialogs.length) {
-    throw new Error("重新提取没有产出可聚类的分析信号，请先处理失败项或调整提取 Prompt");
+    recordNoExtractedSignalsCheckpoint(taskId, batchId, extraction.stepRunId);
+    throw new Error(NO_EXTRACTED_SIGNAL_MESSAGE);
   }
 
   const clustering = await generateClusterSuggestions(
@@ -212,7 +240,8 @@ export async function iterateAllOtherDialogs(taskId: string, settings: AppSettin
   );
 
   if (!extractedDialogs.length) {
-    throw new Error("重新提取没有产出可聚类的分析信号，请先处理失败项或调整提取 Prompt");
+    recordNoExtractedSignalsCheckpoint(taskId, null, extraction.stepRunId);
+    throw new Error(NO_EXTRACTED_SIGNAL_MESSAGE);
   }
 
   const clustering = await generateClusterSuggestions(
@@ -286,20 +315,66 @@ export async function resumeInterruptedIterateAllDialogs(taskId: string, setting
 
   const extractedDialogs = getSuccessfullyExtractedDialogsByStepRun(taskId, latestExtractRun.id);
   if (!extractedDialogs.length) {
+    recordFailedIterateResumeCheckpoint({
+      db,
+      taskId,
+      batchId: null,
+      stepType: "iterate_others_cluster",
+      sourceStartedAt: latestExtractRun.startedAt,
+      inputCount: 0,
+      errorMessage: NO_EXTRACTED_SIGNAL_MESSAGE,
+    });
     return { resumed: false, reason: "no_extracted_dialogs" as const };
   }
 
   if (!latestClusterRun) {
-    const clustering = await generateClusterSuggestions(
-      taskId,
-      null,
-      "iterate_others_cluster",
-      latestExtractRun.id,
-      settings,
-      promptSettings,
-    );
-    const confirmed = await confirmClusterSuggestions(taskId, null);
-    const classification = await runBatchClassificationForDialogs(
+    try {
+      const clustering = await generateClusterSuggestions(
+        taskId,
+        null,
+        "iterate_others_cluster",
+        latestExtractRun.id,
+        settings,
+        promptSettings,
+      );
+      const confirmed = await confirmClusterSuggestions(taskId, null);
+      const classification = await runBatchClassificationForDialogs(
+        taskId,
+        null,
+        extractedDialogs,
+        "iterate_others_classify",
+        settings,
+        promptSettings,
+      );
+
+      return {
+        resumed: true,
+        reason: "resumed_from_extract" as const,
+        clustering,
+        confirmed,
+        classification,
+      };
+    } catch (error) {
+      recordFailedIterateResumeCheckpoint({
+        db,
+        taskId,
+        batchId: null,
+        stepType: "iterate_others_cluster",
+        sourceStartedAt: latestExtractRun.startedAt,
+        inputCount: extractedDialogs.length,
+        errorMessage: error instanceof Error ? error.message : "处理全部其他聚类续跑失败",
+      });
+      throw error;
+    }
+  }
+
+  if (["failed"].includes(latestClusterRun.status)) {
+    return { resumed: false, reason: "cluster_failed" as const };
+  }
+
+  let classification: Awaited<ReturnType<typeof runBatchClassificationForDialogs>>;
+  try {
+    classification = await runBatchClassificationForDialogs(
       taskId,
       null,
       extractedDialogs,
@@ -307,28 +382,18 @@ export async function resumeInterruptedIterateAllDialogs(taskId: string, setting
       settings,
       promptSettings,
     );
-
-    return {
-      resumed: true,
-      reason: "resumed_from_extract" as const,
-      clustering,
-      confirmed,
-      classification,
-    };
+  } catch (error) {
+    recordFailedIterateResumeCheckpoint({
+      db,
+      taskId,
+      batchId: null,
+      stepType: "iterate_others_classify",
+      sourceStartedAt: latestClusterRun.startedAt,
+      inputCount: extractedDialogs.length,
+      errorMessage: error instanceof Error ? error.message : "处理全部其他重分续跑失败",
+    });
+    throw error;
   }
-
-  if (["failed"].includes(latestClusterRun.status)) {
-    return { resumed: false, reason: "cluster_failed" as const };
-  }
-
-  const classification = await runBatchClassificationForDialogs(
-    taskId,
-    null,
-    extractedDialogs,
-    "iterate_others_classify",
-    settings,
-    promptSettings,
-  );
 
   return {
     resumed: true,
