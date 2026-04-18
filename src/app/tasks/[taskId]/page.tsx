@@ -314,6 +314,7 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
         input_count AS inputCount,
         success_count AS successCount,
         failed_count AS failedCount,
+        started_at AS startedAt,
         finished_at AS finishedAt
       FROM step_runs
       WHERE task_id = ? AND step_type IN ('classify', 'classify_retry')
