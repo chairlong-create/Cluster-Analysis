@@ -703,10 +703,15 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
     const pendingSuggestions = suggestions.filter((item) => item.status === "suggested");
     const otherCount = getBatchOtherCount(batch.id);
     const hasPriorClassification = hasClassifyRun(classifyRun, countsByBatch.get(batch.id) ?? []);
+    const oneClickFailureIsStale =
+      oneClickRun?.status === "failed" &&
+      [extractRun, clusterRun, classifyRun].some(
+        (run) => run?.startedAt && oneClickRun.startedAt && run.startedAt > oneClickRun.startedAt,
+      );
 
     const primaryActionLabel = isActiveRun(oneClickRun?.status)
       ? "处理中"
-      : oneClickRun?.status === "failed"
+      : oneClickRun?.status === "failed" && !oneClickFailureIsStale
         ? "失败重试"
         : hasPriorClassification
           ? "重新一键分类"

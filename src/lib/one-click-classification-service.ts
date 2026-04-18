@@ -5,6 +5,7 @@ import { confirmClusterSuggestions, generateClusterSuggestions } from "@/lib/clu
 import { runBatchClassification } from "@/lib/classification-service";
 import { db } from "@/lib/db";
 import { runReasonExtraction } from "@/lib/extraction-service";
+import { withHeartbeat } from "@/lib/heartbeat";
 import { planOneClickBatchSteps } from "@/lib/one-click-classification-plan";
 import { failStepRun, failRunningStepRuns } from "@/lib/step-run-utils";
 import type { PromptSettings } from "@/lib/prompt-config";
@@ -128,59 +129,76 @@ export async function runOneClickBatchClassification(
     lastHeartbeatAt: now,
   });
 
+  const beatWorkflowRun = db.prepare(`
+    UPDATE step_runs
+    SET last_heartbeat_at = @lastHeartbeatAt
+    WHERE id = @id AND status = 'running'
+  `);
+
   try {
-    let extractionResult: Awaited<ReturnType<typeof runReasonExtraction>> | undefined;
-    let clusterResult: Awaited<ReturnType<typeof generateClusterSuggestions>> | undefined;
-    let confirmationResult: Awaited<ReturnType<typeof confirmClusterSuggestions>> | undefined;
-    let classificationResult: Awaited<ReturnType<typeof runBatchClassification>> | undefined;
+    return await withHeartbeat({
+      intervalMs: 1000,
+      beat: () => {
+        beatWorkflowRun.run({
+          id: workflowRunId,
+          lastHeartbeatAt: new Date().toISOString(),
+        });
+      },
+      run: async () => {
+        let extractionResult: Awaited<ReturnType<typeof runReasonExtraction>> | undefined;
+        let clusterResult: Awaited<ReturnType<typeof generateClusterSuggestions>> | undefined;
+        let confirmationResult: Awaited<ReturnType<typeof confirmClusterSuggestions>> | undefined;
+        let classificationResult: Awaited<ReturnType<typeof runBatchClassification>> | undefined;
 
-    for (const step of workflowPlan) {
-      if (step === "extract") {
-        extractionResult = await runReasonExtraction(taskId, batchId, settings, promptSettings);
-      } else if (step === "cluster") {
-        clusterResult = await generateClusterSuggestions(taskId, batchId, "cluster_reasons", undefined, settings, promptSettings);
-      } else if (step === "confirm") {
-        if (getSuggestionCount(taskId, batchId, "suggested") > 0) {
-          confirmationResult = await confirmClusterSuggestions(taskId, batchId);
+        for (const step of workflowPlan) {
+          if (step === "extract") {
+            extractionResult = await runReasonExtraction(taskId, batchId, settings, promptSettings);
+          } else if (step === "cluster") {
+            clusterResult = await generateClusterSuggestions(taskId, batchId, "cluster_reasons", undefined, settings, promptSettings);
+          } else if (step === "confirm") {
+            if (getSuggestionCount(taskId, batchId, "suggested") > 0) {
+              confirmationResult = await confirmClusterSuggestions(taskId, batchId);
+            }
+          } else {
+            classificationResult = await runBatchClassification(taskId, batchId, settings, promptSettings);
+          }
         }
-      } else {
-        classificationResult = await runBatchClassification(taskId, batchId, settings, promptSettings);
-      }
-    }
 
-    if (!classificationResult) {
-      throw new Error("一键分类流程未进入分类步骤");
-    }
+        if (!classificationResult) {
+          throw new Error("一键分类流程未进入分类步骤");
+        }
 
-    const finishedAt = new Date().toISOString();
-    const finalStatus =
-      classificationResult.failedCount === 0
-        ? "succeeded"
-        : classificationResult.successCount > 0
-          ? "partial_success"
-          : "failed";
+        const finishedAt = new Date().toISOString();
+        const finalStatus =
+          classificationResult.failedCount === 0
+            ? "succeeded"
+            : classificationResult.successCount > 0
+              ? "partial_success"
+              : "failed";
 
-    db.prepare(`
+        db.prepare(`
       UPDATE step_runs
       SET status = @status, success_count = @successCount, failed_count = @failedCount, finished_at = @finishedAt, last_heartbeat_at = @lastHeartbeatAt
       WHERE id = @id
     `).run({
-      id: workflowRunId,
-      status: finalStatus,
-      successCount: classificationResult.successCount,
-      failedCount: classificationResult.failedCount,
-      finishedAt,
-      lastHeartbeatAt: finishedAt,
-    });
+          id: workflowRunId,
+          status: finalStatus,
+          successCount: classificationResult.successCount,
+          failedCount: classificationResult.failedCount,
+          finishedAt,
+          lastHeartbeatAt: finishedAt,
+        });
 
-    return {
-      workflowStepRunId: workflowRunId,
-      workflowPlan,
-      extractionResult,
-      clusterResult,
-      confirmationResult,
-      classificationResult,
-    };
+        return {
+          workflowStepRunId: workflowRunId,
+          workflowPlan,
+          extractionResult,
+          clusterResult,
+          confirmationResult,
+          classificationResult,
+        };
+      },
+    });
   } catch (error) {
     failStepRun(workflowRunId);
     throw error;
