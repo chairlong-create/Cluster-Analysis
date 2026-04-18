@@ -983,6 +983,12 @@ code {
   padding-left: 2px;
 }
 
+.exportButtonStack {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
 .categoryAddCell {
   padding: 0 !important;
 }
@@ -1138,6 +1144,51 @@ code {
 .progressCopy {
   font-size: 0.82rem;
   color: var(--muted);
+}
+
+.oneClickProgressPanel {
+  display: grid;
+  gap: 10px;
+}
+
+.oneClickStageTrack {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.oneClickStage {
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.oneClickStageDone {
+  border-color: var(--primary);
+  color: var(--foreground);
+}
+
+.oneClickStageActive {
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+
+.oneClickStageFailed {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.advancedActions {
+  border-top: 1px solid var(--surface-border);
+  padding-top: 12px;
+}
+
+.advancedActions summary {
+  cursor: pointer;
+  font-weight: 700;
 }
 
 .summaryChartCard {
@@ -1427,6 +1478,12 @@ code {
 
   .workspaceMeta {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .oneClickStageTrack {
+    grid-template-columns: 1fr;
   }
 }
 

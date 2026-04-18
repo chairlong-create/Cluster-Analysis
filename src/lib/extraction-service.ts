@@ -4,6 +4,7 @@ import type { AppSettings } from "@/lib/app-config";
 import { db } from "@/lib/db";
 import { withHeartbeat } from "@/lib/heartbeat";
 import { recordFailedExtractionAttempt } from "@/lib/extraction-log-writer";
+import { getExtractionCategoryAssignment } from "@/lib/extraction-category-assignment";
 import { ExtractionParseError } from "@/lib/llm/extraction-parser";
 import { extractReasonWithMiniMax } from "@/lib/llm/minimax";
 import type { ExtractionRequest } from "@/lib/llm/types";
@@ -192,13 +193,21 @@ export async function runReasonExtractionForDialogs(
   `);
   const upsertResult = db.prepare(`
     INSERT INTO dialog_analysis_results (
-      id, dialog_id, task_id, batch_id, buy_block_reason, evidence_quote, evidence_explanation,
+      id, dialog_id, task_id, batch_id, category_id, category_name_snapshot, buy_block_reason, evidence_quote, evidence_explanation,
       source_step_run_id, result_status, review_status, updated_at
     ) VALUES (
-      @id, @dialogId, @taskId, @batchId, @buyBlockReason, @evidenceQuote, @evidenceExplanation,
+      @id, @dialogId, @taskId, @batchId, @categoryId, @categoryNameSnapshot, @buyBlockReason, @evidenceQuote, @evidenceExplanation,
       @sourceStepRunId, @resultStatus, 'unreviewed', @updatedAt
     )
     ON CONFLICT(dialog_id) DO UPDATE SET
+      category_id = CASE
+        WHEN excluded.result_status = 'no_buy_block_reason' THEN dialog_analysis_results.category_id
+        ELSE COALESCE(excluded.category_id, dialog_analysis_results.category_id)
+      END,
+      category_name_snapshot = CASE
+        WHEN excluded.result_status = 'no_buy_block_reason' THEN dialog_analysis_results.category_name_snapshot
+        ELSE COALESCE(excluded.category_name_snapshot, dialog_analysis_results.category_name_snapshot)
+      END,
       buy_block_reason = excluded.buy_block_reason,
       evidence_quote = excluded.evidence_quote,
       evidence_explanation = excluded.evidence_explanation,
@@ -264,6 +273,7 @@ export async function runReasonExtractionForDialogs(
           const createdAt = new Date().toISOString();
           const parsedStatus = providerResponse.log.status === "succeeded" ? "parsed" : "failed";
           const resultStatus = providerResponse.result.hasTargetSignal ? "reasons_extracted" : "no_buy_block_reason";
+          const categoryAssignment = getExtractionCategoryAssignment(resultStatus);
 
           db.transaction(() => {
             insertRunItem.run({
@@ -296,6 +306,8 @@ export async function runReasonExtractionForDialogs(
               dialogId: current.id,
               taskId,
               batchId: current.batchId,
+              categoryId: categoryAssignment.categoryId ?? null,
+              categoryNameSnapshot: categoryAssignment.categoryNameSnapshot ?? null,
               buyBlockReason: providerResponse.result.analysisSummary,
               evidenceQuote: providerResponse.result.evidenceQuote,
               evidenceExplanation: providerResponse.result.evidenceExplanation,

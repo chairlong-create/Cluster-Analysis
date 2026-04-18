@@ -54,7 +54,7 @@ export async function GET(_: Request, { params }: RouteProps) {
     resultStatus: string;
   }>;
 
-  const csv = toCsv([
+  const csv = `\uFEFF${toCsv([
     ["batch_file", "source_dialog_id", "text", "analysis_summary", "category", "evidence_quote", "evidence_explanation", "result_status"],
     ...rows.map((row) => [
       row.fileName,
@@ -66,13 +66,14 @@ export async function GET(_: Request, { params }: RouteProps) {
       row.evidenceExplanation,
       row.resultStatus,
     ]),
-  ]);
+  ])}`;
+  const filename = `${task.name}-analysis.csv`;
 
   return new NextResponse(csv, {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(task.name)}-analysis.csv"`,
+      "Content-Disposition": `attachment; filename="task-analysis.csv"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     },
   });
 }

@@ -34,11 +34,13 @@ export type CategorySummary = {
 export type StepRunSummary = {
   id: string;
   batchId: string | null;
+  stepType?: string;
   status: string;
   roundNo: number;
   inputCount: number;
   successCount: number;
   failedCount: number;
+  startedAt?: string;
   finishedAt: string | null;
 };
 

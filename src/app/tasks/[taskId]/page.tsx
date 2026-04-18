@@ -33,7 +33,6 @@ type TaskPageProps = {
     mergeError?: string;
     tab?: string;
     batchId?: string;
-    stage?: string;
   }>;
 };
 
@@ -122,7 +121,6 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
   const importError = resolvedSearchParams?.importError;
   const mergeError = resolvedSearchParams?.mergeError;
   const activeTab = resolvedSearchParams?.tab === "convergence" ? "convergence" : "batches";
-  const selectedStage = resolvedSearchParams?.stage === "cluster" ? "cluster" : null;
 
   const task = db
     .prepare(`
@@ -214,6 +212,7 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
         input_count AS inputCount,
         success_count AS successCount,
         failed_count AS failedCount,
+        started_at AS startedAt,
         finished_at AS finishedAt
       FROM step_runs
       WHERE task_id = ? AND batch_id IS NULL AND step_type = 'merge_categories'
@@ -248,6 +247,7 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
         input_count AS inputCount,
         success_count AS successCount,
         failed_count AS failedCount,
+        started_at AS startedAt,
         finished_at AS finishedAt
       FROM step_runs
       WHERE task_id = ? AND step_type IN ('extract_reasons', 'extract_reasons_retry')
@@ -268,6 +268,7 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
         input_count AS inputCount,
         success_count AS successCount,
         failed_count AS failedCount,
+        started_at AS startedAt,
         finished_at AS finishedAt
       FROM step_runs
       WHERE task_id = ? AND step_type = 'cluster_reasons'
@@ -313,6 +314,7 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
         input_count AS inputCount,
         success_count AS successCount,
         failed_count AS failedCount,
+        started_at AS startedAt,
         finished_at AS finishedAt
       FROM step_runs
       WHERE task_id = ? AND step_type IN ('classify', 'classify_retry')
@@ -322,6 +324,27 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
     .all(taskId) as StepRunSummary[];
 
   const latestClassifyRunByBatch = mapLatestByKey(classifyRuns, (run) => run.batchId ?? "");
+
+  const oneClickRuns = db
+    .prepare(`
+      SELECT
+        id,
+        batch_id AS batchId,
+        step_type AS stepType,
+        status,
+        round_no AS roundNo,
+        input_count AS inputCount,
+        success_count AS successCount,
+        failed_count AS failedCount,
+        started_at AS startedAt,
+        finished_at AS finishedAt
+      FROM step_runs
+      WHERE task_id = ? AND step_type = 'one_click_classify'
+      ORDER BY started_at DESC
+    `)
+    .all(taskId) as StepRunSummary[];
+
+  const latestOneClickRunByBatch = mapLatestByKey(oneClickRuns, (run) => run.batchId ?? "");
 
   const iterateRuns = db
     .prepare(`
@@ -468,7 +491,8 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
   const batchRunsActive =
     extractRuns.some((run) => isActiveRun(run.status)) ||
     clusterRuns.some((run) => isActiveRun(run.status)) ||
-    classifyRuns.some((run) => isActiveRun(run.status));
+    classifyRuns.some((run) => isActiveRun(run.status)) ||
+    oneClickRuns.some((run) => isActiveRun(run.status));
   const hasActiveRuns =
     isActiveRun(latestMergeRun?.status) ||
     batchRunsActive ||
@@ -518,6 +542,11 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
     const classifyRun = latestClassifyRunByBatch.get(batchId);
     if (isActiveRun(classifyRun?.status)) {
       return "当前批次正在批量分类，请等待完成后再执行其他步骤。";
+    }
+
+    const oneClickRun = latestOneClickRunByBatch.get(batchId);
+    if (isActiveRun(oneClickRun?.status)) {
+      return "当前批次正在一键分类，请等待完成后再执行其他步骤。";
     }
 
     return null;
@@ -673,27 +702,24 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
     const extractRun = latestExtractRunByBatch.get(batch.id);
     const clusterRun = latestClusterRunByBatch.get(batch.id);
     const classifyRun = latestClassifyRunByBatch.get(batch.id);
+    const oneClickRun = latestOneClickRunByBatch.get(batch.id);
     const suggestions = suggestionsByBatch.get(batch.id) ?? [];
     const pendingSuggestions = suggestions.filter((item) => item.status === "suggested");
-    const confirmedSuggestions = suggestions.filter((item) => item.status === "confirmed");
     const otherCount = getBatchOtherCount(batch.id);
+    const hasPriorClassification = hasClassifyRun(classifyRun, countsByBatch.get(batch.id) ?? []);
+    const oneClickFailureIsStale =
+      oneClickRun?.status === "failed" &&
+      [extractRun, clusterRun, classifyRun].some(
+        (run) => run?.startedAt && oneClickRun.startedAt && run.startedAt > oneClickRun.startedAt,
+      );
 
-    const primaryActionLabel =
-      batch.workflowMode === "classify_only"
-        ? hasClassifyRun(latestClassifyRunByBatch.get(batch.id), countsByBatch.get(batch.id) ?? [])
-          ? "重新分类"
-          : "开始分类"
-        : !extractRun
-          ? "提取信号"
-          : pendingSuggestions.length
-            ? "确认建议"
-            : !clusterRun || clusterRun.status === "failed" || (!pendingSuggestions.length && !confirmedSuggestions.length)
-              ? clusterRun?.status === "failed"
-                ? "重试建议"
-                : "生成建议"
-              : !classifyRun
-                ? "开始分类"
-                : "重新分类";
+    const primaryActionLabel = isActiveRun(oneClickRun?.status)
+      ? "处理中"
+      : oneClickRun?.status === "failed" && !oneClickFailureIsStale
+        ? "失败重试"
+        : hasPriorClassification
+          ? "重新一键分类"
+          : "一键分类";
 
     return {
       batch,
@@ -755,13 +781,13 @@ export default async function TaskPage({ params, searchParams }: TaskPageProps) 
             extractRun={selectedBatch ? latestExtractRunByBatch.get(selectedBatch.id) : undefined}
             clusterRun={selectedBatch ? latestClusterRunByBatch.get(selectedBatch.id) : undefined}
             classifyRun={selectedBatch ? latestClassifyRunByBatch.get(selectedBatch.id) : undefined}
+            oneClickRun={selectedBatch ? latestOneClickRunByBatch.get(selectedBatch.id) : undefined}
             suggestions={selectedBatch ? suggestionsByBatch.get(selectedBatch.id) ?? [] : []}
             categoryCounts={selectedBatch ? getBatchCategoryRows(selectedBatch.id) : []}
             extractionSamples={selectedBatch ? extractionSamplesByBatch.get(selectedBatch.id) ?? [] : []}
             conflictReason={selectedBatch ? getBatchActiveConflict(selectedBatch.id) : null}
             analysisGoal={task.analysisGoal}
             analysisFocusLabel={task.analysisFocusLabel}
-            viewStage={selectedStage}
           />
           <article className="panel">
             <div className="sectionHeader">

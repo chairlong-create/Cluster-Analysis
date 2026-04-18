@@ -2,6 +2,95 @@
 
 这份文档面向下一个会话或后续维护者。目标只有一个：快速接上当前真实状态，不重复踩坑。
 
+## 0. 2026-04-19 补充：批次一键分类 V2 与稳定性收口
+
+本轮分支：`codex/simplify-batch-advance-v2.0`。
+
+核心目标已经从“批次推进三步手动操作”升级为“一键分类”：
+
+- 建类批次：一键串联信号提取、聚类建议、确认写入类别表、批量分类
+- 直接分类批次：一键跳过建类步骤，直接使用当前类别表分类
+- UI 层有进度展示，避免用户不知道当前是否还在运行
+- 原有分步按钮仍保留，便于排查、重跑和精细控制
+
+关键实现文件：
+
+- `src/lib/one-click-classification-plan.ts`
+- `src/lib/one-click-classification-service.ts`
+- `src/app/api/tasks/[taskId]/batches/[batchId]/one-click-classify/route.ts`
+- `src/components/batch-detail-panel.tsx`
+- `src/app/tasks/[taskId]/page.tsx`
+- `tests/one-click-classification-plan.test.ts`
+
+### 0.1 处理全部其他的最新语义
+
+`处理全部其他` 仍然是任务级动作，不要改回逐批处理。
+
+当前语义：
+
+- 只处理当前任务中落入系统 `其他` 的记录
+- 提取阶段允许 `partial_success`
+- 已成功提取出有效信号的记录继续进入聚类和重分
+- 提取失败的记录保留在 `其他`
+- 模型判断为 `no_buy_block_reason` / 无有效分析信号的记录也保留在 `其他`
+- 不要把这类记录清成 `未分类`，否则用户不知道去哪里处理
+
+注意：这里曾经踩过一次坑。上一版为了避免无信号记录重复被处理，把 `no_buy_block_reason` 的分类字段清空，导致 UI 出现 `未分类`。后来已改回“保留原分类”，并把当前本地任务里的受影响记录恢复为 `其他`。
+
+相关文件：
+
+- `src/lib/extraction-category-assignment.ts`
+- `src/lib/extraction-service.ts`
+- `tests/extraction-category-clearance.test.ts`
+- `src/lib/iterate-others-service.ts`
+
+### 0.2 处理全部其他的续跑和失败检查点
+
+为避免“提取完成但聚类未启动”或“聚类完成但重分未启动”时页面卡住，当前有两层机制：
+
+1. 前端 `TaskIterateResume` 会在需要时调用 `/api/tasks/[taskId]/iterate/resume`
+2. 服务端续跑失败时，会写入明确的 failed checkpoint
+
+如果没有可聚类信号，也会写入 `iterate_others_cluster failed`，而不是让页面一直认为还在处理中。
+
+相关文件：
+
+- `src/components/task-iterate-resume.tsx`
+- `src/lib/iterate-resume-checkpoint.ts`
+- `tests/iterate-resume-checkpoint.test.ts`
+
+### 0.3 CSV 导出体验
+
+导出接口本来能正常返回 `200`，但 IAB 对 `Content-Disposition: attachment` 的下载反馈不明显，用户会感觉“没用”。
+
+当前改法：
+
+- 前端使用 `ExportCsvButton` 主动 fetch CSV blob 并触发下载
+- 按钮展示 `正在导出...` 和失败提示
+- 后端 CSV 加 UTF-8 BOM
+- `Content-Disposition` 同时设置普通 `filename` 和标准 `filename*`
+
+相关文件：
+
+- `src/components/export-csv-button.tsx`
+- `src/components/task-convergence-panel.tsx`
+- `src/app/tasks/[taskId]/export/route.ts`
+
+### 0.4 最近验证和提交
+
+最近已通过：
+
+- `npm run lint`
+- `npm test`
+- `npm run build`
+
+最近相关提交：
+
+- `6966b83 Harden iterate resume failure handling`
+- `6a77768 Clear stale categories after no-signal extraction`
+- `b43f964 Preserve other assignment for no-signal extraction`
+- `8175ccf Make task CSV export explicit`
+
 ## 0. 2026-04-10 补充：线上访问常见问题
 
 ### 浏览器代理插件导致 ERR_TOO_MANY_REDIRECTS

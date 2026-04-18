@@ -5,6 +5,7 @@ import {
 } from "@/app/actions";
 import { AsyncStepButton } from "@/components/async-step-button";
 import { CategorySnapshotTable } from "@/components/category-snapshot-table";
+import { ExportCsvButton } from "@/components/export-csv-button";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import type {
   CategorySample,
@@ -355,9 +356,7 @@ export function TaskConvergencePanel({
             <p className="eyebrow">Current Result</p>
             <h2>当前任务分析结果</h2>
           </div>
-          <a href={`/tasks/${taskId}/export`} className="primaryButton">
-            导出当前任务 CSV
-          </a>
+          <ExportCsvButton href={`/tasks/${taskId}/export`} />
         </div>
         <div className="taskStats">
           <span>已归档任务批次：{batchesCount} 个</span>

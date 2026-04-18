@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import {
   confirmClusterSuggestionsAction,
   discardClusterSuggestionsAction,
@@ -20,13 +18,13 @@ type BatchDetailPanelProps = {
   extractRun?: StepRunSummary;
   clusterRun?: StepRunSummary;
   classifyRun?: StepRunSummary;
+  oneClickRun?: StepRunSummary;
   suggestions: ClusterSuggestion[];
   categoryCounts: BatchCategoryCount[];
   extractionSamples: ExtractionSample[];
   conflictReason: string | null;
   analysisGoal: string;
   analysisFocusLabel: string;
-  viewStage?: "cluster" | null;
 };
 
 function formatRunStatus(status: string | null | undefined) {
@@ -88,19 +86,66 @@ function getRunMeta(run: StepRunSummary | undefined, statusOverride?: string | n
   return formatTime(run?.finishedAt) || "尚无时间记录";
 }
 
+function startedAfter(run: StepRunSummary | undefined, startedAt: string | undefined) {
+  if (!run?.startedAt || !startedAt) {
+    return false;
+  }
+
+  return run.startedAt > startedAt;
+}
+
+function getLatestStartedRun(runs: Array<StepRunSummary | undefined>) {
+  return runs.reduce<StepRunSummary | undefined>((latest, run) => {
+    if (!run) {
+      return latest;
+    }
+
+    if (!latest) {
+      return run;
+    }
+
+    if (!latest.startedAt) {
+      return run.startedAt ? run : latest;
+    }
+
+    if (!run.startedAt) {
+      return latest;
+    }
+
+    if (run.startedAt > latest.startedAt) {
+      return run;
+    }
+
+    return latest;
+  }, undefined);
+}
+
+type OneClickStageKey = "extract" | "cluster" | "confirm" | "classify";
+
+const seedOneClickStages: Array<{ key: OneClickStageKey; label: string }> = [
+  { key: "extract", label: "提取分析信号" },
+  { key: "cluster", label: "生成类别建议" },
+  { key: "confirm", label: "写入类别表" },
+  { key: "classify", label: "批量分类" },
+];
+
+const classifyOnlyStages: Array<{ key: OneClickStageKey; label: string }> = [
+  { key: "classify", label: "批量分类" },
+];
+
 export function BatchDetailPanel({
   taskId,
   batch,
   extractRun,
   clusterRun,
   classifyRun,
+  oneClickRun,
   suggestions,
   categoryCounts,
   extractionSamples,
   conflictReason,
   analysisGoal,
   analysisFocusLabel,
-  viewStage,
 }: BatchDetailPanelProps) {
   if (!batch) {
     return (
@@ -114,9 +159,25 @@ export function BatchDetailPanel({
   }
 
   const pendingSuggestions = suggestions.filter((item) => item.status === "suggested");
-  const confirmedSuggestions = suggestions.filter((item) => item.status === "confirmed");
   const hasClassifiedBefore = categoryCounts.some((row) => row.categoryName && row.categoryName !== "未分类");
+  const hasConflict = Boolean(conflictReason);
+  const oneClickFailureIsStale =
+    oneClickRun?.status === "failed" &&
+    [extractRun, clusterRun, classifyRun].some((run) => startedAfter(run, oneClickRun.startedAt));
+  const effectiveOneClickStatus = oneClickFailureIsStale ? undefined : oneClickRun?.status;
+  const activeSubStepStatus =
+    extractRun?.status === "running"
+      ? extractRun.status
+      : clusterRun?.status === "running"
+        ? clusterRun.status
+        : classifyRun?.status === "running"
+          ? classifyRun.status
+          : undefined;
+  const latestSubStepRun = getLatestStartedRun([extractRun, clusterRun, classifyRun]);
   const latestOverallStatus =
+    effectiveOneClickStatus ??
+    activeSubStepStatus ??
+    (oneClickFailureIsStale ? latestSubStepRun?.status : undefined) ??
     classifyRun?.status ??
     (pendingSuggestions.length ? "pending_suggestions" : undefined) ??
     clusterRun?.status ??
@@ -128,76 +189,48 @@ export function BatchDetailPanel({
         .map((row) => `${row.categoryName || "未分类"}：${row.count}条`)
         .join("  ")
     : "当前还没有分类结果。";
-  const showPostExtractActions =
-    batch.workflowMode === "seed" &&
-    Boolean(extractRun) &&
-    extractRun?.status !== "running" &&
-    !clusterRun &&
-    pendingSuggestions.length === 0 &&
-    confirmedSuggestions.length === 0 &&
-    viewStage !== "cluster";
-  const showClusterReadyStage =
-    batch.workflowMode === "seed" &&
-    Boolean(extractRun) &&
-    extractRun?.status !== "running" &&
-    !clusterRun &&
-    pendingSuggestions.length === 0 &&
-    confirmedSuggestions.length === 0 &&
-    viewStage === "cluster";
   const extractFailedCount = extractRun?.failedCount ?? 0;
   const classifyFailedCount = classifyRun?.failedCount ?? 0;
-
-  const primaryAction =
+  const clusterActionLabel = clusterRun?.status === "failed" ? "重试生成类别建议" : "生成类别建议";
+  const classifyActionLabel = hasClassifiedBefore ? "重新批量分类" : "开始批量分类";
+  const oneClickActive = effectiveOneClickStatus === "running";
+  const oneClickFailed = effectiveOneClickStatus === "failed";
+  const oneClickStages = batch.workflowMode === "seed" ? seedOneClickStages : classifyOnlyStages;
+  const oneClickStage: OneClickStageKey =
     batch.workflowMode === "classify_only"
-      ? {
-          label: hasClassifiedBefore ? "重新批量分类" : "开始批量分类",
-          endpoint: `/api/tasks/${taskId}/batches/${batch.id}/classify`,
-        }
-      : !extractRun
-        ? {
-            label: "提取分析信号",
-            endpoint: `/api/tasks/${taskId}/batches/${batch.id}/extract`,
-          }
-        : showClusterReadyStage
-          ? {
-              label: "开始聚类",
-              endpoint: `/api/tasks/${taskId}/batches/${batch.id}/cluster`,
-            }
-        : showPostExtractActions
-          ? null
-        : pendingSuggestions.length
-          ? null
-          : !clusterRun || clusterRun.status === "failed" || (!pendingSuggestions.length && !confirmedSuggestions.length)
-            ? {
-                label: clusterRun?.status === "failed" ? "重试生成类别建议" : "生成类别建议",
-                endpoint: `/api/tasks/${taskId}/batches/${batch.id}/cluster`,
-              }
-            : !classifyRun
-              ? {
-                  label: "开始批量分类",
-                  endpoint: `/api/tasks/${taskId}/batches/${batch.id}/classify`,
-                }
-              : {
-                  label: hasClassifiedBefore ? "重新批量分类" : "开始批量分类",
-                  endpoint: `/api/tasks/${taskId}/batches/${batch.id}/classify`,
-                };
+      ? "classify"
+      : extractRun?.status === "running"
+        ? "extract"
+        : clusterRun?.status === "running"
+          ? "cluster"
+          : pendingSuggestions.length
+            ? "confirm"
+            : classifyRun?.status === "running"
+              ? "classify"
+              : oneClickFailed && clusterRun?.status === "failed"
+                ? "cluster"
+                : oneClickFailed && extractRun?.status === "failed"
+                  ? "extract"
+                  : oneClickFailed && classifyRun?.status === "failed"
+                    ? "classify"
+                    : "classify";
+  const oneClickStageIndex = Math.max(
+    0,
+    oneClickStages.findIndex((stage) => stage.key === oneClickStage),
+  );
+  const primaryAction = {
+    label: hasClassifiedBefore ? "重新一键分类" : "一键分类",
+    endpoint: `/api/tasks/${taskId}/batches/${batch.id}/one-click-classify`,
+  };
   const operationSummary =
     batch.workflowMode === "seed"
       ? pendingSuggestions.length
-        ? "当前已有待确认的类别建议，确认后会写入类别表，再继续批量分类。"
-        : primaryAction?.label === "提取分析信号"
-          ? `这个批次正在承担建类职责，先提取${analysisFocusLabel}，再生成类别建议。`
-          : primaryAction?.label?.includes("建议")
-            ? "该批次已完成信号提取，下一步应该收敛出可写入类别表的建议。"
-            : "当前可按最新类别表对这个建类批次完成分类。"
-      : "这个批次按“直接分类”模式推进，默认跳过信号提取与聚类，直接套用当前类别表。";
+        ? "当前已有待确认的类别建议，一键分类会继续完成写入与分类。"
+        : `一键分类会按建类流程提取${analysisFocusLabel}、生成建议并完成分类。`
+      : "一键分类会跳过建类阶段，直接套用当前类别表完成归类。";
   const resultStage =
     batch.workflowMode === "seed" && extractRun?.status === "running"
       ? "extract"
-      : showClusterReadyStage
-        ? "cluster"
-      : showPostExtractActions
-        ? "extract"
       : batch.workflowMode === "seed" && clusterRun?.status === "running"
         ? "cluster"
         : classifyRun?.status === "running"
@@ -206,9 +239,9 @@ export function BatchDetailPanel({
             ? "classify"
             : pendingSuggestions.length
               ? "cluster"
-              : !extractRun || primaryAction?.endpoint.includes("/extract")
+              : !extractRun || !clusterRun
                 ? "extract"
-                : primaryAction?.endpoint.includes("/cluster")
+                : !classifyRun
                   ? "cluster"
                   : "classify";
   const activeProgressRun =
@@ -221,7 +254,7 @@ export function BatchDetailPanel({
       : batch.workflowMode === "seed" && clusterRun?.status === "running"
         ? {
             title: "正在生成类别建议",
-            copy: "聚类建议生成中，请等待这一轮完成后确认写入类别表。",
+            copy: "类别建议生成中，请等待模型返回。",
             progress: 100,
             indeterminate: true,
           }
@@ -282,15 +315,16 @@ export function BatchDetailPanel({
         <input type="hidden" name="batchId" value={batch.id} />
         <label className="field inlineField">
           <span>批次用途</span>
-          <select name="workflowMode" defaultValue={batch.workflowMode}>
+          <select name="workflowMode" defaultValue={batch.workflowMode} disabled={hasConflict}>
             <option value="seed">建类</option>
             <option value="classify_only">直接分类</option>
           </select>
         </label>
-        <button type="submit" className="secondaryButton">
+        <button type="submit" className="secondaryButton" disabled={hasConflict}>
           更新批次用途
         </button>
       </form>
+      {hasConflict ? <p className="hint">当前有任务正在运行，暂不能修改批次用途。</p> : null}
 
       <div className="batchTimeline">
         {timelineRows.map((item) => (
@@ -307,10 +341,37 @@ export function BatchDetailPanel({
           <div className="taskCardHeader">
             <div>
               <p className="eyebrow">Primary Action</p>
-              <h3>下一步操作</h3>
-              <p>直接在这里推进当前批次，不再额外分散到其他说明卡片。</p>
+              <h3>一键分类</h3>
+              <p>默认按当前批次用途自动推进完整流程。</p>
             </div>
           </div>
+          {oneClickActive || oneClickFailed ? (
+            <div className="oneClickProgressPanel">
+              <div className="oneClickStageTrack">
+                {oneClickStages.map((stage, index) => (
+                  <span
+                    key={stage.key}
+                    className={`oneClickStage ${
+                      index < oneClickStageIndex
+                        ? "oneClickStageDone"
+                        : index === oneClickStageIndex
+                          ? oneClickFailed
+                            ? "oneClickStageFailed"
+                            : "oneClickStageActive"
+                          : ""
+                    }`}
+                  >
+                    {stage.label}
+                  </span>
+                ))}
+              </div>
+              <p className={oneClickFailed ? "logError" : "progressCopy"}>
+                {oneClickFailed
+                  ? `一键分类未完成，失败步骤：${oneClickStages[oneClickStageIndex]?.label ?? "未知步骤"}`
+                  : `一键分类进行中，步骤 ${oneClickStageIndex + 1}/${oneClickStages.length}：正在${oneClickStages[oneClickStageIndex]?.label}`}
+              </p>
+            </div>
+          ) : null}
           {activeProgressRun ? (
             <div className="progressPanel">
               <div className="progressBar">
@@ -324,103 +385,75 @@ export function BatchDetailPanel({
               </p>
             </div>
           ) : null}
-          {showPostExtractActions ? (
+          <AsyncStepButton
+            endpoint={primaryAction.endpoint}
+            label={primaryAction.label}
+            disabled={hasConflict}
+          />
+          {conflictReason ? <p className="hint">{conflictReason}</p> : null}
+          <details className="advancedActions">
+            <summary>高级操作</summary>
             <div className="stack compactStack">
-              <div className="actionRow">
-                <AsyncStepButton
-                  endpoint={`/api/tasks/${taskId}/batches/${batch.id}/extract`}
-                  label="重新提取"
-                  className="secondaryButton"
-                  disabled={Boolean(conflictReason)}
-                  disabledReason={conflictReason ?? undefined}
-                />
-                {extractFailedCount > 0 ? (
-                  <AsyncStepButton
-                    endpoint={`/api/tasks/${taskId}/batches/${batch.id}/extract/retry-failed`}
-                    label="失败重试"
-                    className="ghostButton"
-                    disabled={Boolean(conflictReason)}
-                    disabledReason={conflictReason ?? undefined}
-                  />
-                ) : null}
-                {conflictReason ? (
-                  <span className="primaryButton buttonDisabledLike" aria-disabled="true">
-                    下一步
-                  </span>
-                ) : (
-                  <Link
-                    href={`/tasks/${taskId}?tab=batches&batchId=${batch.id}&stage=cluster`}
-                    className="primaryButton"
-                    scroll={false}
-                  >
-                    下一步
-                  </Link>
-                )}
-              </div>
-              {conflictReason ? <p className="hint">{conflictReason}</p> : null}
-              <p className="hint">
-                当前这轮信号提取已完成
-                {extractRun?.failedCount ? `，其中 ${extractRun.failedCount} 条失败` : ""}。你可以重新提取全部记录，或只重试失败条目，再继续进入类别建议。
-              </p>
-            </div>
-          ) : null}
-          {primaryAction ? (
-            primaryAction.endpoint.includes("/classify") && classifyFailedCount > 0 ? (
-              <div className="stack compactStack">
+              {batch.workflowMode === "seed" ? (
                 <div className="actionRow">
                   <AsyncStepButton
-                    endpoint={primaryAction.endpoint}
-                    label={primaryAction.label}
-                    disabled={Boolean(conflictReason)}
-                    disabledReason={conflictReason ?? undefined}
+                    endpoint={`/api/tasks/${taskId}/batches/${batch.id}/extract`}
+                    label={extractRun ? "重新提取" : "提取分析信号"}
+                    className="secondaryButton"
+                    disabled={hasConflict}
                   />
+                  {extractFailedCount > 0 ? (
+                    <AsyncStepButton
+                      endpoint={`/api/tasks/${taskId}/batches/${batch.id}/extract/retry-failed`}
+                      label="重试提取失败"
+                      className="ghostButton"
+                      disabled={hasConflict}
+                    />
+                  ) : null}
                   <AsyncStepButton
-                    endpoint={`/api/tasks/${taskId}/batches/${batch.id}/classify/retry-failed`}
-                    label="失败重试"
-                    className="ghostButton"
-                    disabled={Boolean(conflictReason)}
-                    disabledReason={conflictReason ?? undefined}
+                    endpoint={`/api/tasks/${taskId}/batches/${batch.id}/cluster`}
+                    label={clusterActionLabel}
+                    className="secondaryButton"
+                    disabled={hasConflict}
                   />
                 </div>
-                {conflictReason ? <p className="hint">{conflictReason}</p> : null}
-                <p className="hint">
-                  当前这轮批量分类已完成
-                  {classifyRun?.failedCount ? `，其中 ${classifyRun.failedCount} 条失败` : ""}。你可以重新批量分类全部记录，或只重试失败条目。
-                </p>
-              </div>
-            ) : (
-              <AsyncStepButton
-                endpoint={primaryAction.endpoint}
-                label={primaryAction.label}
-                disabled={Boolean(conflictReason)}
-                disabledReason={conflictReason ?? undefined}
-              />
-            )
-          ) : null}
-          {batch.workflowMode === "seed" && pendingSuggestions.length ? (
-            <div className="stack compactStack">
+              ) : null}
               <div className="actionRow">
-                <form action={confirmClusterSuggestionsAction}>
-                  <input type="hidden" name="taskId" value={taskId} />
-                  <input type="hidden" name="batchId" value={batch.id} />
-                  <button type="submit" className="primaryButton" disabled={Boolean(conflictReason)}>
-                    确认建议写入类别表
-                  </button>
-                </form>
-                <form action={discardClusterSuggestionsAction}>
-                  <input type="hidden" name="taskId" value={taskId} />
-                  <input type="hidden" name="batchId" value={batch.id} />
-                  <button type="submit" className="ghostButton" disabled={Boolean(conflictReason)}>
-                    废弃
-                  </button>
-                </form>
+                <AsyncStepButton
+                  endpoint={`/api/tasks/${taskId}/batches/${batch.id}/classify`}
+                  label={classifyActionLabel}
+                  className="secondaryButton"
+                  disabled={hasConflict}
+                />
+                {classifyFailedCount > 0 ? (
+                  <AsyncStepButton
+                    endpoint={`/api/tasks/${taskId}/batches/${batch.id}/classify/retry-failed`}
+                    label="重试分类失败"
+                    className="ghostButton"
+                    disabled={hasConflict}
+                  />
+                ) : null}
               </div>
-              {conflictReason ? <p className="hint">{conflictReason}</p> : null}
+              {batch.workflowMode === "seed" && pendingSuggestions.length ? (
+                <div className="actionRow">
+                  <form action={confirmClusterSuggestionsAction}>
+                    <input type="hidden" name="taskId" value={taskId} />
+                    <input type="hidden" name="batchId" value={batch.id} />
+                    <button type="submit" className="primaryButton" disabled={hasConflict}>
+                      确认建议写入类别表
+                    </button>
+                  </form>
+                  <form action={discardClusterSuggestionsAction}>
+                    <input type="hidden" name="taskId" value={taskId} />
+                    <input type="hidden" name="batchId" value={batch.id} />
+                    <button type="submit" className="ghostButton" disabled={hasConflict}>
+                      废弃
+                    </button>
+                  </form>
+                </div>
+              ) : null}
             </div>
-          ) : null}
-          {!primaryAction && !pendingSuggestions.length && !showPostExtractActions ? (
-            <p className="hint">当前批次暂无新的主操作，可查看结果或按最新类别表重新分类。</p>
-          ) : null}
+          </details>
         </section>
 
         <section className="resultCard batchPrimaryCard">

@@ -143,7 +143,7 @@ export function reconcileStalledStepRuns(staleAfterMs = 15000) {
         ) AS lastActivityAt
       FROM step_runs sr
       WHERE sr.status = 'running'
-        AND sr.step_type IN ('extract_reasons', 'classify', 'classify_retry', 'iterate_others_extract', 'iterate_others_classify')
+        AND sr.step_type IN ('extract_reasons', 'classify', 'classify_retry', 'iterate_others_extract', 'iterate_others_classify', 'one_click_classify')
     `)
     .all() as ReconcileCandidate[];
 
