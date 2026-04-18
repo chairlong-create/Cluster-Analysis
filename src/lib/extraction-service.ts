@@ -201,12 +201,12 @@ export async function runReasonExtractionForDialogs(
     )
     ON CONFLICT(dialog_id) DO UPDATE SET
       category_id = CASE
-        WHEN excluded.result_status = 'no_buy_block_reason' THEN excluded.category_id
-        ELSE dialog_analysis_results.category_id
+        WHEN excluded.result_status = 'no_buy_block_reason' THEN dialog_analysis_results.category_id
+        ELSE COALESCE(excluded.category_id, dialog_analysis_results.category_id)
       END,
       category_name_snapshot = CASE
-        WHEN excluded.result_status = 'no_buy_block_reason' THEN excluded.category_name_snapshot
-        ELSE dialog_analysis_results.category_name_snapshot
+        WHEN excluded.result_status = 'no_buy_block_reason' THEN dialog_analysis_results.category_name_snapshot
+        ELSE COALESCE(excluded.category_name_snapshot, dialog_analysis_results.category_name_snapshot)
       END,
       buy_block_reason = excluded.buy_block_reason,
       evidence_quote = excluded.evidence_quote,

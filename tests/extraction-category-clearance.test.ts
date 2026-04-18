@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 
 import { getExtractionCategoryAssignment } from "../src/lib/extraction-category-assignment.ts";
 
-test("getExtractionCategoryAssignment clears stale category assignment when no target signal is found", () => {
+test("getExtractionCategoryAssignment preserves category assignment when no target signal is found", () => {
   assert.deepEqual(getExtractionCategoryAssignment("no_buy_block_reason"), {
-    categoryId: null,
-    categoryNameSnapshot: null,
+    categoryId: undefined,
+    categoryNameSnapshot: undefined,
   });
 });
 
