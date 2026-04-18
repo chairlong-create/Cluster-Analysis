@@ -1470,12 +1470,14 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .oneClickStageTrack {
-    grid-template-columns: 1fr;
-  }
-
   .workspaceMeta {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .oneClickStageTrack {
+    grid-template-columns: 1fr;
   }
 }
 
