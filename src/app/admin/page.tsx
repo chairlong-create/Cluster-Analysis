@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/current-user";
 import { createUserAction, resetPasswordAction, deleteUserAction } from "./actions";
@@ -34,9 +36,9 @@ export default async function AdminPage() {
         <p className="eyebrow">Admin</p>
         <h1>用户管理</h1>
         <p className="heroCopy">
-          <a href="/" style={{ color: "var(--primary)", textDecoration: "underline" }}>
+          <Link href="/" style={{ color: "var(--primary)", textDecoration: "underline" }}>
             返回首页
-          </a>
+          </Link>
         </p>
       </section>
 
