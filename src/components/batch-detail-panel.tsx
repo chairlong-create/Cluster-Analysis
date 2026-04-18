@@ -86,6 +86,40 @@ function getRunMeta(run: StepRunSummary | undefined, statusOverride?: string | n
   return formatTime(run?.finishedAt) || "尚无时间记录";
 }
 
+function startedAfter(run: StepRunSummary | undefined, startedAt: string | undefined) {
+  if (!run?.startedAt || !startedAt) {
+    return false;
+  }
+
+  return run.startedAt > startedAt;
+}
+
+function getLatestStartedRun(runs: Array<StepRunSummary | undefined>) {
+  return runs.reduce<StepRunSummary | undefined>((latest, run) => {
+    if (!run) {
+      return latest;
+    }
+
+    if (!latest) {
+      return run;
+    }
+
+    if (!latest.startedAt) {
+      return run.startedAt ? run : latest;
+    }
+
+    if (!run.startedAt) {
+      return latest;
+    }
+
+    if (run.startedAt > latest.startedAt) {
+      return run;
+    }
+
+    return latest;
+  }, undefined);
+}
+
 type OneClickStageKey = "extract" | "cluster" | "confirm" | "classify";
 
 const seedOneClickStages: Array<{ key: OneClickStageKey; label: string }> = [
@@ -126,8 +160,24 @@ export function BatchDetailPanel({
 
   const pendingSuggestions = suggestions.filter((item) => item.status === "suggested");
   const hasClassifiedBefore = categoryCounts.some((row) => row.categoryName && row.categoryName !== "未分类");
+  const hasConflict = Boolean(conflictReason);
+  const oneClickFailureIsStale =
+    oneClickRun?.status === "failed" &&
+    [extractRun, clusterRun, classifyRun].some((run) => startedAfter(run, oneClickRun.startedAt));
+  const effectiveOneClickStatus = oneClickFailureIsStale ? undefined : oneClickRun?.status;
+  const activeSubStepStatus =
+    extractRun?.status === "running"
+      ? extractRun.status
+      : clusterRun?.status === "running"
+        ? clusterRun.status
+        : classifyRun?.status === "running"
+          ? classifyRun.status
+          : undefined;
+  const latestSubStepRun = getLatestStartedRun([extractRun, clusterRun, classifyRun]);
   const latestOverallStatus =
-    oneClickRun?.status ??
+    effectiveOneClickStatus ??
+    activeSubStepStatus ??
+    (oneClickFailureIsStale ? latestSubStepRun?.status : undefined) ??
     classifyRun?.status ??
     (pendingSuggestions.length ? "pending_suggestions" : undefined) ??
     clusterRun?.status ??
@@ -143,8 +193,8 @@ export function BatchDetailPanel({
   const classifyFailedCount = classifyRun?.failedCount ?? 0;
   const clusterActionLabel = clusterRun?.status === "failed" ? "重试生成类别建议" : "生成类别建议";
   const classifyActionLabel = hasClassifiedBefore ? "重新批量分类" : "开始批量分类";
-  const oneClickActive = oneClickRun?.status === "running";
-  const oneClickFailed = oneClickRun?.status === "failed";
+  const oneClickActive = effectiveOneClickStatus === "running";
+  const oneClickFailed = effectiveOneClickStatus === "failed";
   const oneClickStages = batch.workflowMode === "seed" ? seedOneClickStages : classifyOnlyStages;
   const oneClickStage: OneClickStageKey =
     batch.workflowMode === "classify_only"
@@ -265,15 +315,16 @@ export function BatchDetailPanel({
         <input type="hidden" name="batchId" value={batch.id} />
         <label className="field inlineField">
           <span>批次用途</span>
-          <select name="workflowMode" defaultValue={batch.workflowMode}>
+          <select name="workflowMode" defaultValue={batch.workflowMode} disabled={hasConflict}>
             <option value="seed">建类</option>
             <option value="classify_only">直接分类</option>
           </select>
         </label>
-        <button type="submit" className="secondaryButton">
+        <button type="submit" className="secondaryButton" disabled={hasConflict}>
           更新批次用途
         </button>
       </form>
+      {hasConflict ? <p className="hint">当前有任务正在运行，暂不能修改批次用途。</p> : null}
 
       <div className="batchTimeline">
         {timelineRows.map((item) => (
@@ -337,8 +388,7 @@ export function BatchDetailPanel({
           <AsyncStepButton
             endpoint={primaryAction.endpoint}
             label={primaryAction.label}
-            disabled={Boolean(conflictReason)}
-            disabledReason={conflictReason ?? undefined}
+            disabled={hasConflict}
           />
           {conflictReason ? <p className="hint">{conflictReason}</p> : null}
           <details className="advancedActions">
@@ -350,24 +400,21 @@ export function BatchDetailPanel({
                     endpoint={`/api/tasks/${taskId}/batches/${batch.id}/extract`}
                     label={extractRun ? "重新提取" : "提取分析信号"}
                     className="secondaryButton"
-                    disabled={Boolean(conflictReason)}
-                    disabledReason={conflictReason ?? undefined}
+                    disabled={hasConflict}
                   />
                   {extractFailedCount > 0 ? (
                     <AsyncStepButton
                       endpoint={`/api/tasks/${taskId}/batches/${batch.id}/extract/retry-failed`}
                       label="重试提取失败"
                       className="ghostButton"
-                      disabled={Boolean(conflictReason)}
-                      disabledReason={conflictReason ?? undefined}
+                      disabled={hasConflict}
                     />
                   ) : null}
                   <AsyncStepButton
                     endpoint={`/api/tasks/${taskId}/batches/${batch.id}/cluster`}
                     label={clusterActionLabel}
                     className="secondaryButton"
-                    disabled={Boolean(conflictReason)}
-                    disabledReason={conflictReason ?? undefined}
+                    disabled={hasConflict}
                   />
                 </div>
               ) : null}
@@ -376,16 +423,14 @@ export function BatchDetailPanel({
                   endpoint={`/api/tasks/${taskId}/batches/${batch.id}/classify`}
                   label={classifyActionLabel}
                   className="secondaryButton"
-                  disabled={Boolean(conflictReason)}
-                  disabledReason={conflictReason ?? undefined}
+                  disabled={hasConflict}
                 />
                 {classifyFailedCount > 0 ? (
                   <AsyncStepButton
                     endpoint={`/api/tasks/${taskId}/batches/${batch.id}/classify/retry-failed`}
                     label="重试分类失败"
                     className="ghostButton"
-                    disabled={Boolean(conflictReason)}
-                    disabledReason={conflictReason ?? undefined}
+                    disabled={hasConflict}
                   />
                 ) : null}
               </div>
@@ -394,20 +439,19 @@ export function BatchDetailPanel({
                   <form action={confirmClusterSuggestionsAction}>
                     <input type="hidden" name="taskId" value={taskId} />
                     <input type="hidden" name="batchId" value={batch.id} />
-                    <button type="submit" className="primaryButton" disabled={Boolean(conflictReason)}>
+                    <button type="submit" className="primaryButton" disabled={hasConflict}>
                       确认建议写入类别表
                     </button>
                   </form>
                   <form action={discardClusterSuggestionsAction}>
                     <input type="hidden" name="taskId" value={taskId} />
                     <input type="hidden" name="batchId" value={batch.id} />
-                    <button type="submit" className="ghostButton" disabled={Boolean(conflictReason)}>
+                    <button type="submit" className="ghostButton" disabled={hasConflict}>
                       废弃
                     </button>
                   </form>
                 </div>
               ) : null}
-              {conflictReason ? <p className="hint">{conflictReason}</p> : null}
             </div>
           </details>
         </section>
