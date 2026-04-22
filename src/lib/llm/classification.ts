@@ -5,6 +5,7 @@ import {
   getClassificationUserPrompt,
 } from "@/lib/prompts/classification";
 import type { PromptSettings } from "@/lib/prompt-config";
+import { fetchWithBurstRateRetry } from "@/lib/llm/openai-compatible-fetch";
 
 type CategoryInput = {
   id: string;
@@ -144,7 +145,7 @@ export async function classifyDialogWithMiniMax(input: {
   }
 
   const startedAt = Date.now();
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetchWithBurstRateRetry(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -168,6 +169,8 @@ export async function classifyDialogWithMiniMax(input: {
       },
     }),
     cache: "no-store",
+    rateLimitKey: `classification:${baseUrl}:${model}`,
+    minIntervalMs: 220,
   });
 
   const latencyMs = Date.now() - startedAt;

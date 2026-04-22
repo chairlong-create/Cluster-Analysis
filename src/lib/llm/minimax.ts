@@ -1,5 +1,6 @@
 import type { AppSettings } from "@/lib/app-config";
 import { parseExtractionResponse } from "@/lib/llm/extraction-parser";
+import { fetchWithBurstRateRetry } from "@/lib/llm/openai-compatible-fetch";
 import type { ExtractionRequest, ExtractionResult, ProviderExtractionResponse } from "@/lib/llm/types";
 import { buildExtractionSystemPrompt, getExtractionUserPrompt } from "@/lib/prompts/extraction";
 import type { PromptSettings } from "@/lib/prompt-config";
@@ -78,7 +79,7 @@ export async function extractReasonWithMiniMax(
   }
 
   const startedAt = Date.now();
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetchWithBurstRateRetry(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -96,6 +97,8 @@ export async function extractReasonWithMiniMax(
       },
     }),
     cache: "no-store",
+    rateLimitKey: `extraction:${baseUrl}:${model}`,
+    minIntervalMs: 220,
   });
 
   const latencyMs = Date.now() - startedAt;

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AppSettings } from "@/lib/app-config";
 import { buildClusteringSystemPrompt, getClusteringUserPrompt } from "@/lib/prompts/clustering";
+import { fetchWithBurstRateRetry } from "@/lib/llm/openai-compatible-fetch";
 import type { PromptSettings } from "@/lib/prompt-config";
 
 type ClusterCandidate = {
@@ -153,7 +154,7 @@ export async function clusterReasonsWithMiniMax(
   }
 
   const startedAt = Date.now();
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetchWithBurstRateRetry(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -177,6 +178,8 @@ export async function clusterReasonsWithMiniMax(
       },
     }),
     cache: "no-store",
+    rateLimitKey: `clustering:${baseUrl}:${model}`,
+    minIntervalMs: 220,
   });
 
   const latencyMs = Date.now() - startedAt;
